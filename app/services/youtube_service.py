@@ -1,8 +1,10 @@
 import re
 import logging
 from typing import List, Dict, Any, Optional
+import httpx
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
+from app.config import settings
 from app.models.profiling import VideoItem
 
 logger = logging.getLogger(__name__)
@@ -15,6 +17,7 @@ class YouTubeService:
             'extract_flat': True,
             'skip_download': True,
         }
+        self.api_key = settings.YOUTUBE_API_KEY
 
     def fetch_creator_videos(
         self,
@@ -98,6 +101,9 @@ class YouTubeService:
         except Exception as e:
             logger.error(f"Error fetching YouTube videos for {creator_name}: {e}")
 
+        # Optionally enrich channel statistics if Google YouTube Data API key is provided
+        channel_metadata = self._enrich_with_google_api(creator_name, channel_metadata)
+
         # Compute aggregate video metrics
         durations = [v.duration_seconds for v in videos if v.duration_seconds > 0]
         shorts_count = sum(1 for v in videos if v.is_short)
@@ -137,5 +143,43 @@ class YouTubeService:
             return full_text, opening
         except Exception:
             return None, None
+
+    def _enrich_with_google_api(self, creator_name: str, current_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Uses official Google YouTube Data API v3 to fetch official channel statistics if API key is configured.
+        """
+        api_key = self.api_key or settings.YOUTUBE_API_KEY
+        if not api_key:
+            return current_metadata
+        
+        try:
+            clean_handle = creator_name.replace('@', '').strip()
+            # 1. Try search by channel handle or username
+            url = "https://www.googleapis.com/youtube/v3/channels"
+            params = {
+                "part": "snippet,statistics",
+                "forHandle": clean_handle if not clean_handle.startswith("UC") else None,
+                "id": clean_handle if clean_handle.startswith("UC") else None,
+                "key": api_key
+            }
+            params = {k: v for k, v in params.items() if v is not None}
+            
+            with httpx.Client(timeout=5.0) as client:
+                res = client.get(url, params=params)
+                if res.status_code == 200:
+                    data = res.json()
+                    items = data.get("items", [])
+                    if items:
+                        item = items[0]
+                        stats = item.get("statistics", {})
+                        snippet = item.get("snippet", {})
+                        current_metadata["subscriber_count"] = int(stats.get("subscriberCount", 0))
+                        current_metadata["channel_title"] = snippet.get("title", current_metadata["channel_title"])
+                        current_metadata["description"] = snippet.get("description", current_metadata["description"])
+                        logger.info(f"Enriched YouTube channel statistics via Google API: {current_metadata['channel_title']}")
+        except Exception as e:
+            logger.debug(f"Google YouTube API enrichment skipped/failed: {e}")
+
+        return current_metadata
 
 youtube_service = YouTubeService()
