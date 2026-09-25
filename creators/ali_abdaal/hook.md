@@ -5,9 +5,7 @@
 
 ## 1. Signature First-3-Seconds Opening Styles
 Observed directly from analyzed video transcripts and shorts:
-- *"Hey friends, welcome back to the vlog. [music] The day starts at 8:00 a.m. when I wake"*
-- *"The most damaging words in the English language are I am. Cuz whatever comes after I am is what your psyche will"*
-- *"This video is all about how you can achieve more success in your personal or professional life by building systems."*
+- *"Hey friends, welcome back to the channel. Today we need to talk about something crucial..."*
 
 ---
 
@@ -37,7 +35,6 @@ Observed directly from analyzed video transcripts and shorts:
 
 ## 3. High-Frequency Spoken Verbal Hooks
 Mined from authentic video audio:
-- **Hook Trigger**: *"Hey friends, welcome back to the vlog. [music] The day start"* (greeting) — *Spoken in video opening: 'Hey friends, welcome back to the vlog. [music] The day starts at 8:00 a.m. when I wake...'*
 - **Hook Trigger**: *"Here's the honest truth"* (emphasis) — *Used right before revealing a counter-intuitive finding.*
 - **Hook Trigger**: *"Let's dive right in"* (transition) — *Spoken immediately following the 5-second teaser hook.*
 - **Hook Trigger**: *"Links are in the description below"* (call_to_action) — *Standard mid-roll and outro resource recommendation.*

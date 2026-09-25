@@ -28,7 +28,6 @@
 ---
 
 ## 4. Verbal Mannerisms & Recurring Phrases ("What Creator Says Often")
-- **"Hey friends, welcome back to the vlog. [music] The day start"** (greeting) — Spoken in video opening: 'Hey friends, welcome back to the vlog. [music] The day starts at 8:00 a.m. when I wake...'
 - **"Here's the honest truth"** (emphasis) — Used right before revealing a counter-intuitive finding.
 - **"Let's dive right in"** (transition) — Spoken immediately following the 5-second teaser hook.
 - **"Links are in the description below"** (call_to_action) — Standard mid-roll and outro resource recommendation.
