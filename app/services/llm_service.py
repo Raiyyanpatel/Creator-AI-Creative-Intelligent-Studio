@@ -16,6 +16,7 @@ from app.models.profiling import (
     VideoItem,
     ArticleItem
 )
+from app.services.db_service import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,22 @@ class LLMService:
 
         with open(hook_md_path, "w", encoding="utf-8") as f:
             f.write(hook_md_content)
+
+        # 9. Persist to PostgreSQL database
+        catalog_summary = {
+            "videos_mined": len(videos),
+            "shorts_mined": youtube_data.get("shorts_count", 0),
+            "articles_mined": len(articles)
+        }
+        db_service.save_creator_profile(
+            creator_name=creator_name,
+            creator_slug=creator_slug,
+            analysis_data=structured_analysis.model_dump(),
+            user_md=user_md_content,
+            hook_md=hook_md_content,
+            catalog_summary=catalog_summary,
+            custom_instructions=custom_instructions
+        )
 
         return {
             "creator_slug": creator_slug,

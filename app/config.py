@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     YOUTUBE_API_KEY: str = ""
     TWITTER_BEARER_TOKEN: str = ""
     
-    # Storage Paths
+    # Database Configuration (PostgreSQL)
+    DATABASE_URL: str = "postgresql://creator:creator_password@localhost:5432/creator_ai_db"
     CREATORS_DIR: Path = BASE_DIR / "creators"
     DATA_DIR: Path = BASE_DIR / "data"
 

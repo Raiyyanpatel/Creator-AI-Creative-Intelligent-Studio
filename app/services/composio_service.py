@@ -15,6 +15,7 @@ from app.models.publish import (
     JobStatus,
     PlatformType
 )
+from app.services.db_service import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ class ComposioService:
         jobs = self._read_jobs()
         jobs.insert(0, job_dict)
         self._write_jobs(jobs)
+        db_service.sync_publish_job(job_dict)
 
         # If human approval is not required, immediately execute
         job = PublishJob(**job_dict)
@@ -139,6 +141,7 @@ class ComposioService:
 
         jobs[target_idx] = job_data
         self._write_jobs(jobs)
+        db_service.sync_publish_job(job_data)
         return PublishJob(**job_data)
 
     def execute_publishing(self, job_id: str) -> PublishJob:
@@ -196,6 +199,7 @@ class ComposioService:
 
         jobs[target_idx] = job_data
         self._write_jobs(jobs)
+        db_service.sync_publish_job(job_data)
         return PublishJob(**job_data)
 
     def list_jobs(self, creator_id: Optional[str] = None, status: Optional[str] = None) -> List[PublishJob]:
