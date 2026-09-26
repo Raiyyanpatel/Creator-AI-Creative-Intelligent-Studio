@@ -1,0 +1,120 @@
+:root {
+  --bg-primary: #080808;
+  --bg-surface: #111111;
+  --bg-surface-2: #171717;
+  --bg-surface-3: #202020;
+  --text-primary: #F7F7F2;
+  --text-secondary: #A6A6A0;
+  --text-muted: #70706B;
+  --ai-accent: #D8FF00;
+  --ai-soft: rgba(216, 255, 0, 0.14);
+  --ai-border: rgba(216, 255, 0, 0.28);
+  --success: #A7F36B;
+  --warning: #FFCC66;
+  --danger: #FF5C6C;
+  --info: #8AB4FF;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.65);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* App container constrained to mobile preview with nice responsiveness */
+.app-viewport {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  position: relative;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  body {
+    background-color: #020202;
+    background-image: radial-gradient(circle at 50% 10%, rgba(216, 255, 0, 0.04), transparent 50%);
+  }
+  .app-viewport {
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-surface-3);
+  border-radius: var(--radius-pill);
+}
+
+.screen-container {
+  flex: 1;
+  padding: 16px 18px calc(88px + env(safe-area-inset-bottom, 16px));
+}
+
+.media-bg {
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+/* Glass effect */
+.glass-panel {
+  background: rgba(23, 23, 23, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}

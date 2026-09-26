@@ -1,0 +1,69 @@
+services:
+  # ==========================================
+  # PostgreSQL Database Service
+  # ==========================================
+  db:
+    image: postgres:16-alpine
+    container_name: creator_ai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: creator
+      POSTGRES_PASSWORD: creator_password
+      POSTGRES_DB: creator_ai_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creator -d creator_ai_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - creator_network
+
+  # ==========================================
+  # Creator AI FastAPI Backend Service
+  # ==========================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: creator_ai_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DEBUG: "True"
+      DATABASE_URL: "postgresql+psycopg2://creator:creator_password@db:5432/creator_ai_db"
+      COMPOSIO_API_KEY: "${COMPOSIO_API_KEY:-}"
+      COMPOSIO_ENTITY_ID: "${COMPOSIO_ENTITY_ID:-default}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      YOUTUBE_API_KEY: "${YOUTUBE_API_KEY:-}"
+      TWITTER_BEARER_TOKEN: "${TWITTER_BEARER_TOKEN:-}"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - creator_profiles:/app/creators
+    networks:
+      - creator_network
+
+volumes:
+  postgres_data:
+    name: creator_ai_postgres_data
+  creator_profiles:
+    name: creator_ai_profiles_data
+
+networks:
+  creator_network:
+    name: creator_ai_network
+    driver: bridge

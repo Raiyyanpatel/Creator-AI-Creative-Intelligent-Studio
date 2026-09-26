@@ -1,0 +1,30 @@
+# Python virtual environments & bytecode
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Sensitive Environment Configurations
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Local databases & storage
+data/*.json
+data/*.db
+data/*.sqlite*
+*.sqlite3
+
+# Logs & testing caches
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Operating system artifacts
+.DS_Store
+Thumbs.db

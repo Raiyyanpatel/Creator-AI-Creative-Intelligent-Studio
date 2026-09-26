@@ -1,0 +1,47 @@
+{
+  "color": {
+    "background": "#080808",
+    "surface": "#111111",
+    "surface2": "#171717",
+    "surface3": "#202020",
+    "text": "#F7F7F2",
+    "textSecondary": "#A6A6A0",
+    "textMuted": "#70706B",
+    "ai": "#D8FF00",
+    "aiSoft": "rgba(216,255,0,0.14)",
+    "success": "#A7F36B",
+    "warning": "#FFCC66",
+    "danger": "#FF5C6C",
+    "info": "#8AB4FF"
+  },
+  "radius": {
+    "sm": 10,
+    "md": 14,
+    "lg": 20,
+    "xl": 28,
+    "pill": 999
+  },
+  "spacing": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 20,
+    "6": 24,
+    "8": 32,
+    "10": 40,
+    "12": 48
+  },
+  "typography": {
+    "fontUI": "Inter, system-ui, sans-serif",
+    "body": 15,
+    "label": 13,
+    "heading": 24,
+    "hero": 42
+  },
+  "motion": {
+    "fast": 180,
+    "normal": 240,
+    "slow": 420
+  }
+}
