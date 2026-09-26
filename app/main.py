@@ -9,6 +9,7 @@ from app.routers.profiling import router as profiling_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.trends import router as trends_router
 from app.routers.publish import router as publish_router
+from app.routers.intelligence import router as intelligence_router
 
 # Configure clean logging
 logging.basicConfig(
@@ -56,6 +57,7 @@ for prefix in ["", "/api"]:
     app.include_router(dashboard_router, prefix=prefix)
     app.include_router(trends_router, prefix=prefix)
     app.include_router(publish_router, prefix=prefix)
+    app.include_router(intelligence_router, prefix=prefix)
 
 @app.get("/", tags=["Health"])
 @app.get("/health", tags=["Health"])
@@ -69,6 +71,7 @@ def health_check():
             "/dashboard",
             "/trends",
             "/publish",
+            "/intelligence",
             "/docs"
         ]
     }

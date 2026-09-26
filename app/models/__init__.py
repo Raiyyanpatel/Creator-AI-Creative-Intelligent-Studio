@@ -27,6 +27,15 @@ from app.models.publish import (
     PublishJob,
     PublishResponse
 )
+from app.models.intelligence import (
+    PlatformChoice,
+    GoalType,
+    IntelligenceRequest,
+    IntelligenceResponse,
+    PlatformTrendsBlock,
+    TrendItem,
+    ContentRecommendation
+)
 
 __all__ = [
     "ProfilingRequest",
@@ -49,5 +58,12 @@ __all__ = [
     "HumanApprovalRequest",
     "HumanRejectionRequest",
     "PublishJob",
-    "PublishResponse"
+    "PublishResponse",
+    "PlatformChoice",
+    "GoalType",
+    "IntelligenceRequest",
+    "IntelligenceResponse",
+    "PlatformTrendsBlock",
+    "TrendItem",
+    "ContentRecommendation",
 ]

@@ -1,0 +1,116 @@
+"""
+Platform Intelligence Models
+=============================
+Pydantic schemas for the cross-platform trend discovery and
+platform.md generation system.
+"""
+
+from enum import Enum
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+
+
+# ──────────────────────────────────────────────
+# Enums
+# ──────────────────────────────────────────────
+
+class PlatformChoice(str, Enum):
+    YOUTUBE = "youtube"
+    INSTAGRAM = "instagram"
+    LINKEDIN = "linkedin"
+    X_TWITTER = "x_twitter"
+
+
+class GoalType(str, Enum):
+    INCREASE_REACH = "increase_reach"
+    INCREASE_FOLLOWERS = "increase_followers"
+    INCREASE_CONNECTIONS = "increase_connections"
+    INCREASE_ENGAGEMENT = "increase_engagement"
+    BRAND_AUTHORITY = "brand_authority"
+
+
+# ──────────────────────────────────────────────
+# Request
+# ──────────────────────────────────────────────
+
+class IntelligenceRequest(BaseModel):
+    creator_name: str = Field(..., description="Creator's display name or handle")
+    niche: str = Field(..., description="Creator's primary niche/domain (e.g. 'AI & Tech', 'Fitness', 'Finance')")
+    location: str = Field("US", description="Country/region code for location-based trends (e.g. 'US', 'IN', 'GB')")
+    platforms: List[PlatformChoice] = Field(
+        default=[PlatformChoice.YOUTUBE, PlatformChoice.INSTAGRAM, PlatformChoice.LINKEDIN, PlatformChoice.X_TWITTER],
+        description="Which platforms to analyze"
+    )
+    platform_handles: Optional[Dict[str, str]] = Field(
+        None,
+        description="Optional handles per platform, e.g. {'youtube': '@mkbhd', 'instagram': 'mkbhd', 'linkedin': 'marques-brownlee', 'x_twitter': 'MKBHD'}"
+    )
+    goals: Optional[Dict[str, GoalType]] = Field(
+        None,
+        description="Per-platform goals, e.g. {'instagram': 'increase_reach', 'youtube': 'increase_followers'}"
+    )
+    generate_platform_md: bool = Field(True, description="Whether to auto-generate platform.md files")
+
+
+# ──────────────────────────────────────────────
+# Trend Items
+# ──────────────────────────────────────────────
+
+class TrendItem(BaseModel):
+    """A single trending content piece discovered on a platform."""
+    rank: int
+    title: str
+    url: Optional[str] = None
+    platform: str
+    content_type: str = Field(..., description="e.g. 'video', 'reel', 'post', 'article', 'thread'")
+    views_or_engagement: Optional[str] = None
+    published_date: Optional[str] = None
+    creator_handle: Optional[str] = None
+    why_trending: Optional[str] = None
+    relevance_to_niche: Optional[str] = None
+    suggested_angle: Optional[str] = None
+    hashtags: List[str] = []
+    thumbnail_url: Optional[str] = None
+
+
+class PlatformTrendsBlock(BaseModel):
+    """All trends discovered for a single platform."""
+    platform: str
+    goal: Optional[str] = None
+    domain_trends: List[TrendItem] = Field(default_factory=list, description="Niche/domain-specific trending content")
+    location_trends: List[TrendItem] = Field(default_factory=list, description="Location/region trending content")
+    global_trends: List[TrendItem] = Field(default_factory=list, description="Global/worldwide trending content")
+    hashtag_trends: List[str] = Field(default_factory=list, description="Currently trending hashtags for this platform")
+    content_strategy: Optional[str] = None
+    platform_md_path: Optional[str] = None
+
+
+class ContentRecommendation(BaseModel):
+    """AI-generated content recommendation based on trends."""
+    platform: str
+    content_type: str
+    topic: str
+    hook: str
+    why_now: str
+    estimated_reach: Optional[str] = None
+    hashtags: List[str] = []
+    best_posting_time: Optional[str] = None
+
+
+# ──────────────────────────────────────────────
+# Response
+# ──────────────────────────────────────────────
+
+class IntelligenceResponse(BaseModel):
+    creator_name: str
+    niche: str
+    location: str
+    analyzed_at: str
+    platforms_analyzed: List[str]
+    platform_trends: List[PlatformTrendsBlock]
+    top_recommendations: List[ContentRecommendation] = []
+    platform_md_files: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of platform -> file path for generated platform.md files"
+    )
+    summary: Optional[str] = None

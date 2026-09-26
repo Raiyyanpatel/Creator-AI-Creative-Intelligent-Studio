@@ -14,6 +14,9 @@ Built with **FastAPI**, **PostgreSQL 16**, **Docker & Docker Compose**, **Compos
 | **`/profiling/{slug}`** | `GET` | Fetches previously saved `user.md` and `hook.md` for a creator directly. |
 | **`/dashboard`** | `GET`, `POST` | Cross-platform metrics (YouTube, Substack, LinkedIn, X/Twitter) + in-app Creator AI pipeline analytics (scripts, hooks, pending approvals, published) + formatted datasets for React Native charts. |
 | **`/trends`** | `GET`, `POST` | Live Google Trends RSS feeds, domain/niche-specific trending topics, viral format templates, and actionable content angles. |
+| **`/intelligence`** | `POST` | **🆕 Cross-platform trend intelligence.** Scans YouTube, Instagram, LinkedIn, and X/Twitter for domain, location, and global trends. Generates `platform_{name}.md` files with trending links, hashtags, content strategies, and AI-powered recommendations. |
+| **`/intelligence/quick`** | `GET` | Lightweight GET version of the intelligence scan via query params. |
+| **`/intelligence/platforms`** | `GET` | Lists available platforms and default goal types. |
 | **`/publish`** | `POST` | Submits content for multi-platform publishing (YouTube, LinkedIn, X, Substack) with strict **Human-In-The-Loop Approval**. |
 | **`/publish/jobs`** | `GET` | Lists publishing jobs and pending approval queue. |
 | **`/publish/jobs/{id}/approve`** | `POST` | Authorizes content and dispatches live via **Composio**, updating PostgreSQL record status. |
@@ -191,3 +194,44 @@ POST /publish/jobs/pub_a31807b3ca/approve
 }
 ```
 *Authorizes dispatch, triggers **Composio** action (`Action.TWITTER_CREATION_OF_A_POST`, `Action.LINKEDIN_CREATE_A_POST`, etc.), updates PostgreSQL `publish_jobs` table, and returns the live published URL.*
+
+---
+
+### 5. `/intelligence` — Cross-Platform Trend Intelligence 🆕
+
+**Full Scan (POST):**
+```json
+POST /intelligence
+{
+  "creator_name": "Ali Abdaal",
+  "niche": "Tech & AI",
+  "location": "US",
+  "platforms": ["youtube", "instagram", "linkedin", "x_twitter"],
+  "platform_handles": {
+    "youtube": "@aliabdaal",
+    "instagram": "aliabdaal",
+    "linkedin": "ali-abdaal",
+    "x_twitter": "AliAbdaal"
+  },
+  "goals": {
+    "instagram": "increase_reach",
+    "youtube": "increase_followers",
+    "linkedin": "increase_connections",
+    "x_twitter": "increase_engagement"
+  },
+  "generate_platform_md": true
+}
+```
+
+**Quick Scan (GET):**
+```http
+GET /intelligence/quick?creator_name=Ali%20Abdaal&niche=Tech%20%26%20AI&location=US&platforms=youtube,instagram,linkedin,x_twitter
+```
+
+**Output:**
+- Per-platform **domain trends** (niche-specific), **location trends**, and **global trends** with direct links
+- Trending **hashtags** per platform
+- **Content strategies** optimized per platform and goal
+- **AI-powered content recommendations** with hooks, posting times, and hashtags
+- Auto-generated `platform_{name}.md` files under `creators/{slug}/` containing all trend intelligence
+
