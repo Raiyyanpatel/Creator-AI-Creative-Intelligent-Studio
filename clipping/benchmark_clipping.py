@@ -6,11 +6,11 @@ import io
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-USER_VIDEO_URL = "https://www.youtube.com/watch?v=0GgnSpxedxQ"
+USER_VIDEO_URL = r"C:\Users\Raiyyan Patel\Downloads\example.mp4"
 
 print("=" * 75)
-print(f"🎬 TESTING USER VIDEO: {USER_VIDEO_URL}")
-print("📱 Device: iQOO 15 (Snapdragon 8 Elite Hexagon NPU)")
+print(f"🎬 TESTING USER SPECIFIED LOCAL VIDEO: {USER_VIDEO_URL}")
+print("📱 Target Hardware: iQOO 15 (Snapdragon 8 Elite Hexagon NPU)")
 print("=" * 75)
 
 t0 = time.perf_counter()

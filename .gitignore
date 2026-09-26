@@ -51,3 +51,11 @@ yarn-error.log*
 *.sublime-project
 *.sublime-workspace
 .system_generated/
+
+# Video & Frame Processing Artifacts
+clipping/frames/*
+clipping/exports/*
+clipping/*.mp4
+!clipping/frames/.gitkeep
+!clipping/exports/.gitkeep
+
