@@ -21,11 +21,18 @@ class FormatTrend(BaseModel):
     structure_template: str
 
 class TrendsResponse(BaseModel):
-    creator_name: Optional[str]
+    creator_name: Optional[str] = None
     domain: str
     geo: str
     fetched_at: str
-    niche_trends: List[TrendingItem]
-    world_trends: List[TrendingItem]
-    viral_formats: List[FormatTrend]
-    content_opportunity_matrix: List[Dict[str, Any]]
+    youtube_trending: List[Dict[str, Any]] = Field(default_factory=list, description="Trending videos and Shorts in this domain")
+    instagram_trending: List[Dict[str, Any]] = Field(default_factory=list, description="Viral Instagram Reels and posts in this domain")
+    linkedin_trending: List[Dict[str, Any]] = Field(default_factory=list, description="High-engagement LinkedIn discussions and carousels in this domain")
+    x_twitter_trending: List[Dict[str, Any]] = Field(default_factory=list, description="Viral X / Twitter tweets and threads in this domain")
+    trending_keywords: List[str] = Field(default_factory=list, description="High-velocity search and discussion keywords in this domain")
+    velocity_topics: List[Dict[str, Any]] = Field(default_factory=list, description="Surging search queries and industry velocity topics")
+    niche_trends: List[TrendingItem] = Field(default_factory=list)
+    world_trends: List[TrendingItem] = Field(default_factory=list)
+    viral_formats: List[FormatTrend] = Field(default_factory=list)
+    content_opportunity_matrix: List[Dict[str, Any]] = Field(default_factory=list)
+

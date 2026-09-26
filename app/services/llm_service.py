@@ -623,7 +623,17 @@ Who watches and follows {creator_name} in the **{dom_name}** domain:
             arch_a = "*\"If you still believe that [common myth] is true, the real data will completely shock you.\"*"
             arch_b = "*\"If you are still making this mistake with [topic], stop right now...\"*"
             arch_c = "*\"How did [outcome] happen in just [number] days? Here is the exact mechanism.\"*"
-            arch_d = "*\"This is the one truth that nobody is talking about, but everyone needs to hear.\"*"
+            arch_d = "*\"This is one truth nobody in this space talks about, but everyone desperately needs to hear.\"*"
+        # Extract high-velocity trending keywords for this domain
+        from app.services.trends_service import trends_service
+        trending_kws = trends_service.extract_trending_keywords(dom_name, limit=8)
+        trending_kw_list_md = "\n".join([f"- **{kw}**: Surging search velocity and platform engagement trigger in {dom_name}" for kw in trending_kws])
+        trending_kw_hooks_md = "\n".join([
+            f"1. *\"Why the latest data on '{trending_kws[0] if len(trending_kws) > 0 else dom_name}' changes everything we thought we knew about {dom_name}...\"*",
+            f"2. *\"If you are dealing with '{trending_kws[1] if len(trending_kws) > 1 else 'this issue'}', stop: here is the 1 critical variable everyone is overlooking...\"*",
+            f"3. *\"Behind closed doors: What top performers in {dom_name} aren't telling you about '{trending_kws[2] if len(trending_kws) > 2 else 'industry trends'}'...\"*",
+            f"4. *\"Stop scrolling: Here is the exact breakdown behind '{trending_kws[3] if len(trending_kws) > 3 else 'this breakthrough'}' in 60 seconds.\"*"
+        ])
 
         return f"""# Viral Hook System: {creator_name}
 > The complete retention blueprint, opening hooks, and viral triggers for {creator_name} ({lang_info['name']}).
@@ -715,6 +725,16 @@ To preserve {creator_name}'s retention curve in new AI-generated scripts:
 1. **0:00 - 0:02**: Full frontal camera view, high-contrast text overlay (3 words max) animating in sync with speech.
 2. **0:02 - 0:05**: Immediate visual cut or 1.2x digital punch-in zoom on the key thesis word.
 3. **0:05 - 0:08**: B-roll or dynamic graphic diagram introduced before viewer can mentally drop off.
+
+---
+
+## 9. 🚀 Trending Domain Keywords & High-Velocity Hook Vocabulary
+The following high-velocity keywords are actively surging in the **{dom_name}** domain:
+{trending_kw_list_md}
+
+### ⚡ High-Conversion Viral Hooks Powered by Trending Keywords:
+{trending_kw_hooks_md}
 """
 
 llm_service = LLMService()
+

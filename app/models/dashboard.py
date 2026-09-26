@@ -35,5 +35,6 @@ class DashboardResponse(BaseModel):
     platforms: Dict[str, PlatformMetricDetail]
     app_platform_metrics: AppEngagementMetrics
     charts: Dict[str, Any] = Field(..., description="Ready-to-render data structures for React Native charts")
+    creator_activity: Dict[str, Any] = Field(default_factory=dict, description="Detailed creator activity on our platform (Creator AI app) and across all external platforms")
     executive_summary: str
     key_recommendations: List[str]

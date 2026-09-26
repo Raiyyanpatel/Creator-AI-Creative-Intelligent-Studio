@@ -31,3 +31,23 @@ Thumbs.db
 
 # Scratch exploration scripts
 scratch/
+
+# Node & Frontend Build
+node_modules/
+dist/
+dist-ssr/
+*.local
+.expo/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+*.tsbuildinfo
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.system_generated/

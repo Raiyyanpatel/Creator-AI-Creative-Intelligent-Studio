@@ -7,8 +7,9 @@ and content recommendations.
 """
 
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Query, Body
+from pydantic import BaseModel, Field
 
 from app.models.intelligence import (
     IntelligenceRequest,
@@ -18,6 +19,7 @@ from app.models.intelligence import (
 from app.models.domain import CreatorDomainProfile, IdentifyDomainRequest
 from app.services.platform_intel_service import platform_intel_service
 from app.services.domain_service import domain_service, DOMAIN_ARCHETYPES
+from app.services.creator_comparator_service import creator_comparator_service
 
 logger = logging.getLogger(__name__)
 
@@ -146,10 +148,10 @@ def list_domain_archetypes():
 @router.post(
     "/identify-domain",
     response_model=CreatorDomainProfile,
-    summary="Identify creator domain, niche, and content pillars (POST)",
+    summary="Identify creator domain, niche, and content pillars",
     description="Dynamically identifies any creator's domain, core verticals, target audience psychographics, competitive moat, and domain monologues.",
 )
-def identify_creator_domain_post(req: IdentifyDomainRequest):
+def identify_creator_domain(req: IdentifyDomainRequest):
     return domain_service.get_creator_domain_profile(
         creator_name=req.creator_name,
         niche_hint=req.niche_hint,
@@ -159,21 +161,34 @@ def identify_creator_domain_post(req: IdentifyDomainRequest):
     )
 
 
-@router.get(
-    "/identify-domain",
-    response_model=CreatorDomainProfile,
-    summary="Identify creator domain, niche, and content pillars (GET)",
-    description="Lightweight query endpoint to quickly identify a creator's domain and niche.",
+# ──────────────────────────────────────────────
+# Compare Any Creator (Dynamic Extraction + Comparison)
+# ──────────────────────────────────────────────
+
+class CompareAnyCreatorRequest(BaseModel):
+    creator_name: str = Field(..., description="Target creator name (e.g. 'Lex Fridman', 'Veritasium', 'MrBeast')")
+    base_creator: Optional[str] = Field("Dhruv Rathee", description="Base creator to benchmark against ('me')")
+    niche_hint: Optional[str] = Field(None, description="Optional hint for target creator's domain")
+    location: Optional[str] = Field("US", description="Location country code")
+
+
+@router.post(
+    "/compare",
+    summary="Compare with any creator across any domain, extracting all 7 dossiers",
+    description="Takes input of any creator (no matter what domain), extracts all platform.md files, user.md, hook.md, and creator_comparison.md, and benchmarks against our base creator profile.",
 )
-def identify_creator_domain_get(
-    creator_name: str = Query(..., description="Creator's display name or handle"),
-    niche_hint: Optional[str] = Query(None, description="Optional hint about niche if known"),
-    language: Optional[str] = Query("en", description="Target spoken language ('hi', 'en', 'es')"),
-):
-    return domain_service.get_creator_domain_profile(
-        creator_name=creator_name,
-        niche_hint=niche_hint,
-        sample_titles=None,
-        bio=None,
-        language=language or "en",
+@router.post(
+    "/compare-any-creator",
+    summary="Alias for /compare: enter any creator, extract all platforms.md, user.md, hook.md, and compare with me",
+    include_in_schema=False,
+)
+def compare_any_creator(req: CompareAnyCreatorRequest):
+    logger.info(f"[Intelligence] Comparing base={req.base_creator} against target={req.creator_name}")
+    return creator_comparator_service.ensure_and_compare_creator(
+        target_creator=req.creator_name,
+        base_creator=req.base_creator or "Dhruv Rathee",
+        niche_hint=req.niche_hint,
+        location=req.location or "US"
     )
+
+

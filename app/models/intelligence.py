@@ -160,5 +160,10 @@ class IntelligenceResponse(BaseModel):
     domain_profile: Optional[Dict[str, Any]] = Field(None, description="Structured domain and audience profile")
     user_md_path: Optional[str] = Field(None, description="Path to generated user.md")
     hook_md_path: Optional[str] = Field(None, description="Path to generated hook.md")
+    creator_comparison_md_path: Optional[str] = Field(None, description="Path to generated creator_comparison.md")
+    domain_top_creators: List[Dict[str, Any]] = Field(default_factory=list, description="Top benchmark creators/leaders discovered for this domain")
+    domain_leader_comparisons: List[Dict[str, Any]] = Field(default_factory=list, description="Head-to-head comparison of all top domain creators against our creator (how they differ and how to improve)")
+    trending_keywords: List[str] = Field(default_factory=list, description="High-velocity trending keywords of that domain injected into hook intelligence")
     summary: Optional[str] = None
+
 

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     YOUTUBE_API_KEY: str = ""
     TWITTER_BEARER_TOKEN: str = ""
     APIFY_API_KEY: str = ""
+    BRIGHT_DATA_API_KEY: str = ""
     
     # Database Configuration (PostgreSQL)
     DATABASE_URL: str = "postgresql://creator:creator_password@localhost:5432/creator_ai_db"

@@ -1,0 +1,3118 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Creator AI Backend Engine",
+    "description": "\n# Creator AI \u2014 Autonomous Creator Backend API Engine\n\nHigh-performance backend for the React Native Creator AI mobile application, delivering real-time multimodal creator intelligence:\n\n- **`/profiling`**: Ingests real creator videos, shorts, transcripts, Substack newsletters, and social posts. Deeply extracts tone, video duration distribution, video types, thumbnail strategies, and authentic spoken vocal mannerisms (\"what user says often\"), generating `user.md` and `hook.md`.\n- **`/dashboard`**: Unified cross-platform metrics across YouTube, Substack, LinkedIn, and X/Twitter + in-app Creator AI pipeline analytics and React Native chart datasets.\n- **`/trends`**: Live Google Trends RSS feeds, domain/niche-specific trending topics, viral format templates, and actionable content angles.\n- **`/publish`**: Human-In-The-Loop approval gate with **Composio** automation for publishing to YouTube, LinkedIn, X/Twitter, and Substack.\n    ",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/profiling": {
+      "post": {
+        "tags": [
+          "Profiling Engine"
+        ],
+        "summary": "Analyze creator across all platforms & generate user.md and hook.md",
+        "description": "Ingests real content across YouTube (videos, shorts, transcripts), Substack (articles),\nX/Twitter (posts), and LinkedIn. Analyzes tone, length of videos, video types, thumbnail strategies,\nfrequently spoken catchphrases, and generates production-ready `user.md` and `hook.md`.",
+        "operationId": "analyze_creator_profile_profiling_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiling/{creator_slug}": {
+      "get": {
+        "tags": [
+          "Profiling Engine"
+        ],
+        "summary": "Retrieve existing user.md and hook.md for creator",
+        "description": "Retrieves the generated `user.md` and `hook.md` directly from disk.",
+        "operationId": "get_existing_profile_profiling__creator_slug__get",
+        "parameters": [
+          {
+            "name": "creator_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Creator Slug"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "tags": [
+          "Creator Engagement Dashboard"
+        ],
+        "summary": "Get full creator engagement metrics & chart analytics",
+        "description": "Returns authentic cross-platform engagement on YouTube, Instagram, Substack, LinkedIn, and X,\nplus in-app Creator AI pipeline analytics (approvals, scripts generated, published posts).\nFormatted with charts ready for React Native consumption.",
+        "operationId": "get_creator_dashboard_dashboard_get",
+        "parameters": [
+          {
+            "name": "creator_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Creator name or ID to view dashboard for",
+              "default": "Ali Abdaal",
+              "title": "Creator Name"
+            },
+            "description": "Creator name or ID to view dashboard for"
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Time window: '7d', '30d', '90d', 'all'",
+              "default": "30d",
+              "title": "Timeframe"
+            },
+            "description": "Time window: '7d', '30d', '90d', 'all'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trends": {
+      "get": {
+        "tags": [
+          "Live Trends & Hook Angles"
+        ],
+        "summary": "Get trendy videos/posts for domain across YouTube, Instagram, LinkedIn & X",
+        "description": "Fetches live real-world trending content across all 4 major platforms (YouTube, Instagram, LinkedIn, X/Twitter)\nfor the specified domain, plus high-velocity trending keywords, viral format templates, and ready-to-record hook angles.",
+        "operationId": "get_trends_trends_get",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Domain/niche (e.g. 'Tech & AI', 'Finance', 'Productivity', 'Fitness', 'Social Causes')",
+              "default": "Tech & AI",
+              "title": "Domain"
+            },
+            "description": "Domain/niche (e.g. 'Tech & AI', 'Finance', 'Productivity', 'Fitness', 'Social Causes')"
+          },
+          {
+            "name": "creator_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional creator name to tailor niche hooks",
+              "title": "Creator Name"
+            },
+            "description": "Optional creator name to tailor niche hooks"
+          },
+          {
+            "name": "geo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Geographic region code for Google Trends (e.g. 'US', 'GB', 'IN', 'GLOBAL')",
+              "default": "US",
+              "title": "Geo"
+            },
+            "description": "Geographic region code for Google Trends (e.g. 'US', 'GB', 'IN', 'GLOBAL')"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 25,
+              "minimum": 3,
+              "description": "Number of trending topics to return per platform",
+              "default": 10,
+              "title": "Limit"
+            },
+            "description": "Number of trending topics to return per platform"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/trends/domain": {
+      "get": {
+        "tags": [
+          "Live Trends & Hook Angles"
+        ],
+        "summary": "Search domain for trendy videos/posts across YouTube, Instagram, LinkedIn & X",
+        "description": "Search any domain to uncover real-time YouTube trending videos, viral Instagram Reels,\nhigh-authority LinkedIn discussions, viral X/Twitter threads, and high-velocity trending keywords.",
+        "operationId": "search_domain_trends_get_trends_domain_get",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Domain/niche (e.g. 'Fitness', 'Gaming', 'Crypto', 'AI Agents', 'Finance', 'Social Causes')",
+              "title": "Domain"
+            },
+            "description": "Domain/niche (e.g. 'Fitness', 'Gaming', 'Crypto', 'AI Agents', 'Finance', 'Social Causes')"
+          },
+          {
+            "name": "geo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Geographic region code ('US', 'IN', 'GLOBAL')",
+              "default": "US",
+              "title": "Geo"
+            },
+            "description": "Geographic region code ('US', 'IN', 'GLOBAL')"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 25,
+              "minimum": 3,
+              "description": "Number of results per category",
+              "default": 10,
+              "title": "Limit"
+            },
+            "description": "Number of results per category"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/publish": {
+      "post": {
+        "tags": [
+          "Composio Publishing & Human Approval"
+        ],
+        "summary": "Submit content for publishing with Human Approval & Composio",
+        "description": "Submits a post, short, video, or article to be published to YouTube, LinkedIn, X/Twitter, or Substack.\nEnforces a strict Human-In-The-Loop approval gate: sets status to 'PENDING_APPROVAL'\nand prepares the Composio toolset execution payload.",
+        "operationId": "submit_publish_request_publish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/publish/jobs": {
+      "get": {
+        "tags": [
+          "Composio Publishing & Human Approval"
+        ],
+        "summary": "List all publish jobs and approval queue",
+        "description": "Returns the queue of publishing jobs. Used by the React Native app to display the\n'Pending Approvals' feed and publishing history.",
+        "operationId": "list_publish_jobs_publish_jobs_get",
+        "parameters": [
+          {
+            "name": "creator_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by creator identifier",
+              "title": "Creator Id"
+            },
+            "description": "Filter by creator identifier"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by status: 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED', 'REJECTED'",
+              "title": "Status"
+            },
+            "description": "Filter by status: 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED', 'REJECTED'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublishJob"
+                  },
+                  "title": "Response List Publish Jobs Publish Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/publish/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Composio Publishing & Human Approval"
+        ],
+        "summary": "Get details and approval status of a publish job",
+        "operationId": "get_publish_job_publish_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Unique publish job ID",
+              "title": "Job Id"
+            },
+            "description": "Unique publish job ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishJob"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/publish/jobs/{job_id}/approve": {
+      "post": {
+        "tags": [
+          "Composio Publishing & Human Approval"
+        ],
+        "summary": "Human Approval: Authorize & trigger Composio publication",
+        "description": "Human-in-the-loop approval step. Authorizes content dispatch, records reviewer feedback,\nand immediately invokes Composio's real platform tools to publish the content live.",
+        "operationId": "approve_publish_job_publish_jobs__job_id__approve_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Job ID to approve",
+              "title": "Job Id"
+            },
+            "description": "Job ID to approve"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HumanApprovalRequest",
+                "default": {
+                  "reviewer_name": "Creator Admin"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/publish/jobs/{job_id}/reject": {
+      "post": {
+        "tags": [
+          "Composio Publishing & Human Approval"
+        ],
+        "summary": "Human Rejection: Reject proposed content",
+        "description": "Human rejection step. Cancels publication and saves feedback so the AI can refine future drafts.",
+        "operationId": "reject_publish_job_publish_jobs__job_id__reject_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Job ID to reject",
+              "title": "Job Id"
+            },
+            "description": "Job ID to reject"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HumanRejectionRequest",
+                "default": {
+                  "reviewer_name": "Creator Admin",
+                  "rejection_reason": "Tone mismatch"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intelligence": {
+      "post": {
+        "tags": [
+          "Platform Intelligence & Trends"
+        ],
+        "summary": "Run full cross-platform intelligence scan",
+        "description": "Performs a comprehensive trend analysis across selected platforms (YouTube, Instagram, LinkedIn, X/Twitter).\n\n**What it does:**\n1. Scrapes live trending content per platform for the creator's niche\n2. Discovers domain, location, and global trends with links\n3. Generates platform-specific content strategies\n4. Produces AI-powered content recommendations\n5. Auto-generates `platform_{name}.md` files under `creators/{slug}/`\n\n**Platform Goals:**\n- Instagram \u2192 Increase Reach\n- YouTube \u2192 Increase Followers\n- LinkedIn \u2192 Increase Connections\n- X/Twitter \u2192 Increase Engagement",
+        "operationId": "run_intelligence_scan_intelligence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntelligenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntelligenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intelligence/quick": {
+      "get": {
+        "tags": [
+          "Platform Intelligence & Trends"
+        ],
+        "summary": "Quick intelligence scan via query params",
+        "description": "Lightweight GET endpoint for quick trend scanning without a JSON body.",
+        "operationId": "quick_intelligence_scan_intelligence_quick_get",
+        "parameters": [
+          {
+            "name": "creator_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Creator's display name",
+              "title": "Creator Name"
+            },
+            "description": "Creator's display name"
+          },
+          {
+            "name": "niche",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Creator's niche/domain",
+              "default": "Tech & AI",
+              "title": "Niche"
+            },
+            "description": "Creator's niche/domain"
+          },
+          {
+            "name": "causes_or_topics",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated topics or causes of creator's work (e.g. 'Social Causes, Public Policy')",
+              "title": "Causes Or Topics"
+            },
+            "description": "Comma-separated topics or causes of creator's work (e.g. 'Social Causes, Public Policy')"
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Creator's native spoken language code (e.g. 'hi', 'en', 'es')",
+              "title": "Language"
+            },
+            "description": "Creator's native spoken language code (e.g. 'hi', 'en', 'es')"
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Country/region code",
+              "default": "US",
+              "title": "Location"
+            },
+            "description": "Country/region code"
+          },
+          {
+            "name": "platforms",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated platform names (youtube, instagram, linkedin, x_twitter)",
+              "default": "youtube,instagram,linkedin,x_twitter",
+              "title": "Platforms"
+            },
+            "description": "Comma-separated platform names (youtube, instagram, linkedin, x_twitter)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntelligenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intelligence/platforms": {
+      "get": {
+        "tags": [
+          "Platform Intelligence & Trends"
+        ],
+        "summary": "List available platforms and goals",
+        "description": "Returns the list of supported platforms and goal types for the intelligence system.",
+        "operationId": "list_platforms_intelligence_platforms_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intelligence/domains": {
+      "get": {
+        "tags": [
+          "Platform Intelligence & Trends"
+        ],
+        "summary": "List recognized domain archetypes",
+        "description": "Returns all pre-built creator domains, sub-niches, and core content verticals.",
+        "operationId": "list_domain_archetypes_intelligence_domains_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intelligence/identify-domain": {
+      "post": {
+        "tags": [
+          "Platform Intelligence & Trends"
+        ],
+        "summary": "Identify creator domain, niche, and content pillars",
+        "description": "Dynamically identifies any creator's domain, core verticals, target audience psychographics, competitive moat, and domain monologues.",
+        "operationId": "identify_creator_domain_intelligence_identify_domain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentifyDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorDomainProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intelligence/compare": {
+      "post": {
+        "tags": [
+          "Platform Intelligence & Trends"
+        ],
+        "summary": "Compare with any creator across any domain, extracting all 7 dossiers",
+        "description": "Takes input of any creator (no matter what domain), extracts all platform.md files, user.md, hook.md, and creator_comparison.md, and benchmarks against our base creator profile.",
+        "operationId": "compare_any_creator_intelligence_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareAnyCreatorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppEngagementMetrics": {
+        "properties": {
+          "total_scripts_generated": {
+            "type": "integer",
+            "title": "Total Scripts Generated",
+            "default": 14
+          },
+          "total_hooks_created": {
+            "type": "integer",
+            "title": "Total Hooks Created",
+            "default": 42
+          },
+          "pending_approval_posts": {
+            "type": "integer",
+            "title": "Pending Approval Posts",
+            "default": 3
+          },
+          "approved_posts": {
+            "type": "integer",
+            "title": "Approved Posts",
+            "default": 8
+          },
+          "published_via_composio": {
+            "type": "integer",
+            "title": "Published Via Composio",
+            "default": 19
+          },
+          "publishing_success_rate": {
+            "type": "number",
+            "title": "Publishing Success Rate",
+            "default": 98.4
+          }
+        },
+        "type": "object",
+        "title": "AppEngagementMetrics"
+      },
+      "CompareAnyCreatorRequest": {
+        "properties": {
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name",
+            "description": "Target creator name (e.g. 'Lex Fridman', 'Veritasium', 'MrBeast')"
+          },
+          "base_creator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Creator",
+            "description": "Base creator to benchmark against ('me')",
+            "default": "Dhruv Rathee"
+          },
+          "niche_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche Hint",
+            "description": "Optional hint for target creator's domain"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "Location country code",
+            "default": "US"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name"
+        ],
+        "title": "CompareAnyCreatorRequest"
+      },
+      "ContentFormat": {
+        "type": "string",
+        "enum": [
+          "video",
+          "short",
+          "post",
+          "thread",
+          "article"
+        ],
+        "title": "ContentFormat"
+      },
+      "ContentRecommendation": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "hook": {
+            "type": "string",
+            "title": "Hook"
+          },
+          "why_now": {
+            "type": "string",
+            "title": "Why Now"
+          },
+          "estimated_reach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Reach"
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hashtags",
+            "default": []
+          },
+          "best_posting_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Posting Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "content_type",
+          "topic",
+          "hook",
+          "why_now"
+        ],
+        "title": "ContentRecommendation",
+        "description": "AI-generated content recommendation based on trends."
+      },
+      "CreatorDomainProfile": {
+        "properties": {
+          "domain_id": {
+            "type": "string",
+            "title": "Domain Id",
+            "description": "Standardized domain identifier (e.g. 'tech_gadgets', 'personal_finance', 'civic_social_issues')"
+          },
+          "domain_name": {
+            "type": "string",
+            "title": "Domain Name",
+            "description": "Human-readable domain title (e.g. 'Consumer Technology & Future Gadgets')"
+          },
+          "sub_niche": {
+            "type": "string",
+            "title": "Sub Niche",
+            "description": "Specific sub-vertical or focus area"
+          },
+          "primary_search_topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Primary Search Topics",
+            "description": "High-velocity search queries for discovering live trends in this domain"
+          },
+          "core_verticals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Core Verticals",
+            "description": "Core subject pillars the creator covers"
+          },
+          "content_portfolio": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Content Portfolio",
+            "description": "Standard content formats produced in this domain"
+          },
+          "investigation_methodology": {
+            "type": "string",
+            "title": "Investigation Methodology",
+            "description": "How tests, data, or arguments are researched and verified in this domain"
+          },
+          "audience_profile": {
+            "$ref": "#/components/schemas/DomainAudienceProfile",
+            "description": "Audience demographics, psychographics, and viral sharing habits"
+          },
+          "domain_positioning_and_moat": {
+            "$ref": "#/components/schemas/DomainMoat",
+            "description": "Strategic mission, niche positioning, and defensibility"
+          },
+          "domain_monologues": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DomainMonologue"
+            },
+            "type": "object",
+            "title": "Domain Monologues",
+            "description": "Domain-specific 45s-60s extended spoken monologue blueprints"
+          },
+          "vocal_cadence_dynamics": {
+            "$ref": "#/components/schemas/DomainCadence",
+            "description": "Vocal delivery, pitch trajectory, and pacing dynamics for this domain"
+          },
+          "signature_phrases": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Signature Phrases",
+            "description": "Signature spoken expressions authentic to this domain"
+          },
+          "sample_hooks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sample Hooks",
+            "description": "High-retention opening hooks for this domain"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain_id",
+          "domain_name",
+          "sub_niche",
+          "investigation_methodology",
+          "audience_profile",
+          "domain_positioning_and_moat",
+          "vocal_cadence_dynamics"
+        ],
+        "title": "CreatorDomainProfile",
+        "description": "Full domain intelligence profile for a creator."
+      },
+      "CreatorPlatformProfile": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "handle": {
+            "type": "string",
+            "title": "Handle"
+          },
+          "profile_url": {
+            "type": "string",
+            "title": "Profile Url"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "follower_or_sub_count": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follower Or Sub Count"
+          },
+          "following_count": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Following Count"
+          },
+          "total_posts_or_videos": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Posts Or Videos"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified",
+            "default": false
+          },
+          "recent_content": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Content",
+            "description": "Recent posts/videos/threads extracted from this creator's profile"
+          },
+          "growth_gap_analysis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Growth Gap Analysis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "handle",
+          "profile_url"
+        ],
+        "title": "CreatorPlatformProfile",
+        "description": "Real creator information extracted from a specific platform."
+      },
+      "DashboardResponse": {
+        "properties": {
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name"
+          },
+          "timeframe": {
+            "type": "string",
+            "title": "Timeframe"
+          },
+          "overall_reach": {
+            "type": "integer",
+            "title": "Overall Reach"
+          },
+          "overall_engagement_rate": {
+            "type": "number",
+            "title": "Overall Engagement Rate"
+          },
+          "platforms": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PlatformMetricDetail"
+            },
+            "type": "object",
+            "title": "Platforms"
+          },
+          "app_platform_metrics": {
+            "$ref": "#/components/schemas/AppEngagementMetrics"
+          },
+          "charts": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Charts",
+            "description": "Ready-to-render data structures for React Native charts"
+          },
+          "creator_activity": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Creator Activity",
+            "description": "Detailed creator activity on our platform (Creator AI app) and across all external platforms"
+          },
+          "executive_summary": {
+            "type": "string",
+            "title": "Executive Summary"
+          },
+          "key_recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Key Recommendations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name",
+          "timeframe",
+          "overall_reach",
+          "overall_engagement_rate",
+          "platforms",
+          "app_platform_metrics",
+          "charts",
+          "executive_summary",
+          "key_recommendations"
+        ],
+        "title": "DashboardResponse"
+      },
+      "DomainAudienceProfile": {
+        "properties": {
+          "demographics": {
+            "type": "string",
+            "title": "Demographics",
+            "description": "Target age, professions, location distribution"
+          },
+          "psychographics": {
+            "type": "string",
+            "title": "Psychographics",
+            "description": "Viewer mindset, core pain points, what triggers retention"
+          },
+          "consumption_habits": {
+            "type": "string",
+            "title": "Consumption Habits",
+            "description": "Average watch time, where they share, discussion style"
+          }
+        },
+        "type": "object",
+        "required": [
+          "demographics",
+          "psychographics",
+          "consumption_habits"
+        ],
+        "title": "DomainAudienceProfile"
+      },
+      "DomainCadence": {
+        "properties": {
+          "pitch_modulation": {
+            "type": "string",
+            "title": "Pitch Modulation",
+            "description": "Pitch shifts on key domain reveals"
+          },
+          "micro_pause_timing": {
+            "type": "string",
+            "title": "Micro Pause Timing",
+            "description": "Strategic silence intervals"
+          },
+          "articulation_and_pacing": {
+            "type": "string",
+            "title": "Articulation And Pacing",
+            "description": "Words per minute and delivery energy"
+          },
+          "inclusive_pronoun_habit": {
+            "type": "string",
+            "title": "Inclusive Pronoun Habit",
+            "description": "Framing and relationship dynamic"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pitch_modulation",
+          "micro_pause_timing",
+          "articulation_and_pacing",
+          "inclusive_pronoun_habit"
+        ],
+        "title": "DomainCadence"
+      },
+      "DomainMoat": {
+        "properties": {
+          "mission": {
+            "type": "string",
+            "title": "Mission",
+            "description": "Core purpose / mission in this domain"
+          },
+          "positioning": {
+            "type": "string",
+            "title": "Positioning",
+            "description": "Unique positioning against competitors"
+          },
+          "competitive_moat": {
+            "type": "string",
+            "title": "Competitive Moat",
+            "description": "What makes this creator defensible and trusted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mission",
+          "positioning",
+          "competitive_moat"
+        ],
+        "title": "DomainMoat"
+      },
+      "DomainMonologue": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Monologue archetype title"
+          },
+          "speech": {
+            "type": "string",
+            "title": "Speech",
+            "description": "Verbatim spoken monologue text"
+          },
+          "staging_breakdown": {
+            "type": "string",
+            "title": "Staging Breakdown",
+            "description": "Timestamped staging, visual cues, and pacing breakdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "speech",
+          "staging_breakdown"
+        ],
+        "title": "DomainMonologue"
+      },
+      "FormatTrend": {
+        "properties": {
+          "format_name": {
+            "type": "string",
+            "title": "Format Name"
+          },
+          "virality_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Virality Score"
+          },
+          "ideal_length": {
+            "type": "string",
+            "title": "Ideal Length"
+          },
+          "platform_fit": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Platform Fit"
+          },
+          "why_it_works": {
+            "type": "string",
+            "title": "Why It Works"
+          },
+          "structure_template": {
+            "type": "string",
+            "title": "Structure Template"
+          }
+        },
+        "type": "object",
+        "required": [
+          "format_name",
+          "virality_score",
+          "ideal_length",
+          "platform_fit",
+          "why_it_works",
+          "structure_template"
+        ],
+        "title": "FormatTrend"
+      },
+      "FrequentPhrase": {
+        "properties": {
+          "phrase": {
+            "type": "string",
+            "title": "Phrase"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "'greeting', 'transition', 'catchphrase', 'call_to_action', or 'emphasis'"
+          },
+          "sample_context": {
+            "type": "string",
+            "title": "Sample Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phrase",
+          "count",
+          "category",
+          "sample_context"
+        ],
+        "title": "FrequentPhrase"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HumanApprovalRequest": {
+        "properties": {
+          "reviewer_name": {
+            "type": "string",
+            "title": "Reviewer Name",
+            "description": "Name of person approving",
+            "default": "Creator Admin"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback",
+            "description": "Review notes or approval comments"
+          },
+          "override_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Content",
+            "description": "Optional edited copy by human reviewer"
+          }
+        },
+        "type": "object",
+        "title": "HumanApprovalRequest"
+      },
+      "HumanRejectionRequest": {
+        "properties": {
+          "reviewer_name": {
+            "type": "string",
+            "title": "Reviewer Name",
+            "description": "Name of person rejecting",
+            "default": "Creator Admin"
+          },
+          "rejection_reason": {
+            "type": "string",
+            "title": "Rejection Reason",
+            "description": "Why the content was rejected (e.g., brand tone mismatch)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rejection_reason"
+        ],
+        "title": "HumanRejectionRequest"
+      },
+      "IdentifyDomainRequest": {
+        "properties": {
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name",
+            "description": "Creator's display name or handle"
+          },
+          "niche_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche Hint",
+            "description": "Optional hint about niche if known"
+          },
+          "sample_titles": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Titles",
+            "description": "Recent video/post titles to analyze"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio",
+            "description": "Channel or profile bio text"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language",
+            "description": "Preferred language for monologues and hooks ('hi', 'en', 'es')",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name"
+        ],
+        "title": "IdentifyDomainRequest"
+      },
+      "IntelligenceRequest": {
+        "properties": {
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name",
+            "description": "Creator's display name or handle"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche",
+            "description": "Creator's primary niche/domain (e.g. 'Tech & Gadgets', 'Finance & Investing', 'Social Causes', 'Productivity', or 'auto' for automatic detection)",
+            "default": "auto"
+          },
+          "causes_or_topics": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causes Or Topics",
+            "description": "Creator's specific causes or topics of work (e.g. ['Environmental Crisis', 'Civic Awareness', 'Public Policy']) to find trends related to their work rather than personal news"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language",
+            "description": "Creator's native spoken language code (e.g. 'hi' for Hindi/Hinglish, 'en' for English, 'es' for Spanish). Auto-detected if omitted."
+          },
+          "location": {
+            "type": "string",
+            "title": "Location",
+            "description": "Country/region code for location-based trends (e.g. 'US', 'IN', 'GB')",
+            "default": "US"
+          },
+          "platforms": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformChoice"
+            },
+            "type": "array",
+            "title": "Platforms",
+            "description": "Which platforms to investigate. Only the specified platforms will be queried.",
+            "default": [
+              "youtube",
+              "instagram",
+              "linkedin",
+              "x_twitter"
+            ]
+          },
+          "platform_handles": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform Handles",
+            "description": "Optional handles per platform, e.g. {'youtube': '@dhruvrathee', 'instagram': 'dhruvrathee', 'linkedin': 'dhruvrathee', 'x_twitter': 'dhruv_rathee'}"
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals",
+            "description": "Per-platform goals (e.g. {'youtube': 'increase_subscribers', 'instagram': 'more_views_and_followers'})"
+          },
+          "generate_platform_md": {
+            "type": "boolean",
+            "title": "Generate Platform Md",
+            "description": "Whether to auto-generate platform.md files",
+            "default": true
+          },
+          "generate_user_hook_md": {
+            "type": "boolean",
+            "title": "Generate User Hook Md",
+            "description": "Whether to generate/update user.md and hook.md in the creator's native language based on the investigated apps",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name"
+        ],
+        "title": "IntelligenceRequest"
+      },
+      "IntelligenceResponse": {
+        "properties": {
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name"
+          },
+          "niche": {
+            "type": "string",
+            "title": "Niche"
+          },
+          "location": {
+            "type": "string",
+            "title": "Location"
+          },
+          "analyzed_at": {
+            "type": "string",
+            "title": "Analyzed At"
+          },
+          "platforms_analyzed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Platforms Analyzed"
+          },
+          "creator_profiles": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CreatorPlatformProfile"
+            },
+            "type": "object",
+            "title": "Creator Profiles",
+            "description": "Map of platform -> extracted creator profile data"
+          },
+          "platform_trends": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformTrendsBlock"
+            },
+            "type": "array",
+            "title": "Platform Trends"
+          },
+          "top_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/ContentRecommendation"
+            },
+            "type": "array",
+            "title": "Top Recommendations",
+            "default": []
+          },
+          "platform_md_files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Platform Md Files",
+            "description": "Map of platform -> file path for generated platform.md files"
+          },
+          "detected_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detected Language",
+            "description": "Creator's detected or specified spoken language"
+          },
+          "identified_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identified Domain",
+            "description": "Creator's identified domain/niche name"
+          },
+          "domain_profile": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain Profile",
+            "description": "Structured domain and audience profile"
+          },
+          "user_md_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Md Path",
+            "description": "Path to generated user.md"
+          },
+          "hook_md_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hook Md Path",
+            "description": "Path to generated hook.md"
+          },
+          "creator_comparison_md_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Comparison Md Path",
+            "description": "Path to generated creator_comparison.md"
+          },
+          "domain_top_creators": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Domain Top Creators",
+            "description": "Top benchmark creators/leaders discovered for this domain"
+          },
+          "domain_leader_comparisons": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Domain Leader Comparisons",
+            "description": "Head-to-head comparison of all top domain creators against our creator (how they differ and how to improve)"
+          },
+          "trending_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trending Keywords",
+            "description": "High-velocity trending keywords of that domain injected into hook intelligence"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name",
+          "niche",
+          "location",
+          "analyzed_at",
+          "platforms_analyzed",
+          "platform_trends"
+        ],
+        "title": "IntelligenceResponse"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING_APPROVAL",
+          "APPROVED",
+          "REJECTED",
+          "PUBLISHING",
+          "PUBLISHED",
+          "FAILED"
+        ],
+        "title": "JobStatus"
+      },
+      "PlatformChoice": {
+        "type": "string",
+        "enum": [
+          "youtube",
+          "instagram",
+          "linkedin",
+          "x_twitter"
+        ],
+        "title": "PlatformChoice"
+      },
+      "PlatformMetricDetail": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "handle_or_name": {
+            "type": "string",
+            "title": "Handle Or Name"
+          },
+          "followers_or_subscribers": {
+            "type": "integer",
+            "title": "Followers Or Subscribers"
+          },
+          "total_views_or_impressions": {
+            "type": "integer",
+            "title": "Total Views Or Impressions"
+          },
+          "total_content_pieces": {
+            "type": "integer",
+            "title": "Total Content Pieces"
+          },
+          "avg_engagement_rate_percent": {
+            "type": "number",
+            "title": "Avg Engagement Rate Percent"
+          },
+          "growth_rate_30d_percent": {
+            "type": "number",
+            "title": "Growth Rate 30D Percent"
+          },
+          "recent_performance": {
+            "type": "string",
+            "title": "Recent Performance"
+          },
+          "top_content": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Top Content",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform",
+          "connected",
+          "handle_or_name",
+          "followers_or_subscribers",
+          "total_views_or_impressions",
+          "total_content_pieces",
+          "avg_engagement_rate_percent",
+          "growth_rate_30d_percent",
+          "recent_performance"
+        ],
+        "title": "PlatformMetricDetail"
+      },
+      "PlatformTrendsBlock": {
+        "properties": {
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "creator_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreatorPlatformProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Extracted real creator profile information on this platform"
+          },
+          "domain_trends": {
+            "items": {
+              "$ref": "#/components/schemas/TrendItem"
+            },
+            "type": "array",
+            "title": "Domain Trends",
+            "description": "Niche/domain-specific trending content"
+          },
+          "location_trends": {
+            "items": {
+              "$ref": "#/components/schemas/TrendItem"
+            },
+            "type": "array",
+            "title": "Location Trends",
+            "description": "Location/region trending content"
+          },
+          "global_trends": {
+            "items": {
+              "$ref": "#/components/schemas/TrendItem"
+            },
+            "type": "array",
+            "title": "Global Trends",
+            "description": "Global/worldwide trending content"
+          },
+          "hashtag_trends": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hashtag Trends",
+            "description": "Currently trending hashtags for this platform"
+          },
+          "content_strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Strategy"
+          },
+          "platform_md_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform Md Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "platform"
+        ],
+        "title": "PlatformTrendsBlock",
+        "description": "All trends and creator profile discovered for a single platform."
+      },
+      "PlatformType": {
+        "type": "string",
+        "enum": [
+          "youtube",
+          "linkedin",
+          "twitter",
+          "substack"
+        ],
+        "title": "PlatformType"
+      },
+      "ProfilingAnalysis": {
+        "properties": {
+          "tone": {
+            "$ref": "#/components/schemas/ToneAnalysis"
+          },
+          "video_length": {
+            "$ref": "#/components/schemas/VideoLengthAnalysis"
+          },
+          "video_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Video Types"
+          },
+          "thumbnail_strategy": {
+            "$ref": "#/components/schemas/ThumbnailStrategy"
+          },
+          "frequent_spoken_phrases": {
+            "items": {
+              "$ref": "#/components/schemas/FrequentPhrase"
+            },
+            "type": "array",
+            "title": "Frequent Spoken Phrases"
+          },
+          "post_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Post Formats"
+          },
+          "core_themes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Core Themes"
+          },
+          "content_strengths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Content Strengths"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tone",
+          "video_length",
+          "video_types",
+          "thumbnail_strategy",
+          "frequent_spoken_phrases",
+          "post_formats",
+          "core_themes",
+          "content_strengths"
+        ],
+        "title": "ProfilingAnalysis"
+      },
+      "ProfilingRequest": {
+        "properties": {
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name",
+            "description": "Creator name or username to profile (e.g. Ali Abdaal, MrBeast, Fireship)"
+          },
+          "youtube_handle_or_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Handle Or Url",
+            "description": "Direct YouTube handle or channel URL"
+          },
+          "substack_handle_or_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Substack Handle Or Url",
+            "description": "Substack publication name, handle, or URL"
+          },
+          "twitter_handle_or_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twitter Handle Or Url",
+            "description": "X / Twitter handle or URL"
+          },
+          "linkedin_handle_or_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linkedin Handle Or Url",
+            "description": "LinkedIn profile or creator vanity URL"
+          },
+          "custom_instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Instructions",
+            "description": "Specific profiling focus (e.g., focus on hook retention, pacing)"
+          },
+          "max_videos_to_analyze": {
+            "type": "integer",
+            "title": "Max Videos To Analyze",
+            "description": "Number of recent videos and shorts to analyze",
+            "default": 8
+          },
+          "max_articles_to_analyze": {
+            "type": "integer",
+            "title": "Max Articles To Analyze",
+            "description": "Number of recent Substack articles to inspect",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name"
+        ],
+        "title": "ProfilingRequest"
+      },
+      "ProfilingResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "success"
+          },
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name"
+          },
+          "creator_slug": {
+            "type": "string",
+            "title": "Creator Slug"
+          },
+          "analyzed_at": {
+            "type": "string",
+            "title": "Analyzed At"
+          },
+          "platforms_ingested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Platforms Ingested"
+          },
+          "catalog_summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Catalog Summary"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/ProfilingAnalysis"
+          },
+          "user_md": {
+            "type": "string",
+            "title": "User Md",
+            "description": "Complete user persona and styling blueprint in Markdown format"
+          },
+          "hook_md": {
+            "type": "string",
+            "title": "Hook Md",
+            "description": "Hook mastery breakdown and formulas in Markdown format"
+          },
+          "file_paths": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "File Paths",
+            "description": "Local file paths where user.md and hook.md are saved"
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_name",
+          "creator_slug",
+          "analyzed_at",
+          "platforms_ingested",
+          "catalog_summary",
+          "analysis",
+          "user_md",
+          "hook_md",
+          "file_paths"
+        ],
+        "title": "ProfilingResponse"
+      },
+      "PublishCreateRequest": {
+        "properties": {
+          "creator_id": {
+            "type": "string",
+            "title": "Creator Id",
+            "description": "ID or slug of creator (e.g. 'ali-abdaal')"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
+          "content_format": {
+            "$ref": "#/components/schemas/ContentFormat"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Title for video/article/short"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "Post body text, thread list, or video caption/script"
+          },
+          "media_urls": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Urls",
+            "description": "Media attachments or video file URLs"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For",
+            "description": "ISO timestamp for future scheduled post"
+          },
+          "require_human_approval": {
+            "type": "boolean",
+            "title": "Require Human Approval",
+            "description": "Strictly requires approval before Composio dispatches",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_id",
+          "platform",
+          "content_format",
+          "content"
+        ],
+        "title": "PublishCreateRequest"
+      },
+      "PublishJob": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "creator_id": {
+            "type": "string",
+            "title": "Creator Id"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/PlatformType"
+          },
+          "content_format": {
+            "$ref": "#/components/schemas/ContentFormat"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "media_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Media Urls"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "requires_human_approval": {
+            "type": "boolean",
+            "title": "Requires Human Approval"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "reviewer_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Notes"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "composio_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composio Action"
+          },
+          "composio_execution_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composio Execution Status"
+          },
+          "composio_output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Composio Output"
+          },
+          "published_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "creator_id",
+          "platform",
+          "content_format",
+          "title",
+          "content",
+          "media_urls",
+          "thumbnail_url",
+          "tags",
+          "status",
+          "requires_human_approval",
+          "created_at"
+        ],
+        "title": "PublishJob"
+      },
+      "PublishResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "job": {
+            "$ref": "#/components/schemas/PublishJob"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "job"
+        ],
+        "title": "PublishResponse"
+      },
+      "ThumbnailStrategy": {
+        "properties": {
+          "visual_style": {
+            "type": "string",
+            "title": "Visual Style"
+          },
+          "facial_expression_patterns": {
+            "type": "string",
+            "title": "Facial Expression Patterns"
+          },
+          "color_palette_dominance": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Color Palette Dominance"
+          },
+          "text_density": {
+            "type": "string",
+            "title": "Text Density"
+          },
+          "curiosity_gap_tactics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Curiosity Gap Tactics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visual_style",
+          "facial_expression_patterns",
+          "color_palette_dominance",
+          "text_density",
+          "curiosity_gap_tactics"
+        ],
+        "title": "ThumbnailStrategy"
+      },
+      "ToneAnalysis": {
+        "properties": {
+          "primary_tone": {
+            "type": "string",
+            "title": "Primary Tone"
+          },
+          "energy_level": {
+            "type": "string",
+            "title": "Energy Level"
+          },
+          "pacing": {
+            "type": "string",
+            "title": "Pacing"
+          },
+          "vocabulary_style": {
+            "type": "string",
+            "title": "Vocabulary Style"
+          },
+          "audience_relationship": {
+            "type": "string",
+            "title": "Audience Relationship"
+          },
+          "key_descriptors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Key Descriptors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "primary_tone",
+          "energy_level",
+          "pacing",
+          "vocabulary_style",
+          "audience_relationship",
+          "key_descriptors"
+        ],
+        "title": "ToneAnalysis"
+      },
+      "TrendItem": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "description": "e.g. 'video', 'reel', 'post', 'article', 'thread'"
+          },
+          "views_or_engagement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Views Or Engagement"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "creator_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Handle"
+          },
+          "why_trending": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Trending"
+          },
+          "relevance_to_niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relevance To Niche"
+          },
+          "suggested_angle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Angle"
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hashtags",
+            "default": []
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "title",
+          "platform",
+          "content_type"
+        ],
+        "title": "TrendItem",
+        "description": "A single trending content piece discovered on a platform."
+      },
+      "TrendingItem": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "traffic_volume": {
+            "type": "string",
+            "title": "Traffic Volume"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "Google Trends Live / YouTube Realtime"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "published_or_trending_since": {
+            "type": "string",
+            "title": "Published Or Trending Since"
+          },
+          "news_headlines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "News Headlines",
+            "default": []
+          },
+          "relevance_to_creator": {
+            "type": "string",
+            "title": "Relevance To Creator"
+          },
+          "hook_angles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hook Angles",
+            "description": "Actionable opening hooks to create content around this trend"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "title",
+          "traffic_volume",
+          "category",
+          "published_or_trending_since",
+          "relevance_to_creator",
+          "hook_angles"
+        ],
+        "title": "TrendingItem"
+      },
+      "TrendsResponse": {
+        "properties": {
+          "creator_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Name"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "geo": {
+            "type": "string",
+            "title": "Geo"
+          },
+          "fetched_at": {
+            "type": "string",
+            "title": "Fetched At"
+          },
+          "youtube_trending": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Youtube Trending",
+            "description": "Trending videos and Shorts in this domain"
+          },
+          "instagram_trending": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Instagram Trending",
+            "description": "Viral Instagram Reels and posts in this domain"
+          },
+          "linkedin_trending": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Linkedin Trending",
+            "description": "High-engagement LinkedIn discussions and carousels in this domain"
+          },
+          "x_twitter_trending": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "X Twitter Trending",
+            "description": "Viral X / Twitter tweets and threads in this domain"
+          },
+          "trending_keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trending Keywords",
+            "description": "High-velocity search and discussion keywords in this domain"
+          },
+          "velocity_topics": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Velocity Topics",
+            "description": "Surging search queries and industry velocity topics"
+          },
+          "niche_trends": {
+            "items": {
+              "$ref": "#/components/schemas/TrendingItem"
+            },
+            "type": "array",
+            "title": "Niche Trends"
+          },
+          "world_trends": {
+            "items": {
+              "$ref": "#/components/schemas/TrendingItem"
+            },
+            "type": "array",
+            "title": "World Trends"
+          },
+          "viral_formats": {
+            "items": {
+              "$ref": "#/components/schemas/FormatTrend"
+            },
+            "type": "array",
+            "title": "Viral Formats"
+          },
+          "content_opportunity_matrix": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Content Opportunity Matrix"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "geo",
+          "fetched_at"
+        ],
+        "title": "TrendsResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VideoLengthAnalysis": {
+        "properties": {
+          "average_duration_seconds": {
+            "type": "number",
+            "title": "Average Duration Seconds"
+          },
+          "average_duration_formatted": {
+            "type": "string",
+            "title": "Average Duration Formatted"
+          },
+          "shorts_ratio_percentage": {
+            "type": "number",
+            "title": "Shorts Ratio Percentage"
+          },
+          "long_form_ratio_percentage": {
+            "type": "number",
+            "title": "Long Form Ratio Percentage"
+          },
+          "recommended_duration_range": {
+            "type": "string",
+            "title": "Recommended Duration Range"
+          },
+          "pacing_breakdown": {
+            "type": "string",
+            "title": "Pacing Breakdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "average_duration_seconds",
+          "average_duration_formatted",
+          "shorts_ratio_percentage",
+          "long_form_ratio_percentage",
+          "recommended_duration_range",
+          "pacing_breakdown"
+        ],
+        "title": "VideoLengthAnalysis"
+      }
+    }
+  }
+}

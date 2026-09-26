@@ -47,7 +47,7 @@ class ApifyService:
             logger.debug("[Apify] No APIFY_API_KEY configured; skipping Apify Instagram profile scraper.")
             return None
 
-        clean_handle = handle.replace("@", "").strip()
+        clean_handle = re.sub(r'[^a-zA-Z0-9._]', '', handle.replace("@", "").strip().lower())
         if not clean_handle:
             return None
 

@@ -40,6 +40,8 @@ from app.services.domain_service import domain_service
 from app.services.composio_scraper_service import composio_scraper_service
 from app.services.twitter_api_service import twitter_api_service
 from app.services.apify_service import apify_service
+from app.services.bright_data_service import bright_data_service
+from app.services.creator_comparator_service import creator_comparator_service
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,7 @@ class PlatformIntelService:
         user_md_path_str: Optional[str] = None
         hook_md_path_str: Optional[str] = None
         detected_lang_str: Optional[str] = None
+        comparison_path: Optional[str] = None
 
         if req.generate_user_hook_md:
             try:
@@ -188,9 +191,52 @@ class PlatformIntelService:
                 user_md_path_str = prof_res["file_paths"]["user_md"]
                 hook_md_path_str = prof_res["file_paths"]["hook_md"]
                 detected_lang_str = prof_res.get("detected_language")
-                logger.info(f"[Intel] Successfully generated user.md and hook.md for {req.creator_name} in {detected_lang_str} ({domain_profile.domain_name})")
+
+                # Generate creator_comparison.md benchmarking against top domain peers
+                slug = req.creator_name.lower().replace(" ", "_")
+                creator_dir = str(settings.CREATORS_DIR / slug)
+                comparison_path = creator_comparator_service.generate_creator_comparison_md(
+                    base_creator=req.creator_name,
+                    output_dir=creator_dir
+                )
+                logger.info(f"[Intel] Successfully generated user.md, hook.md & creator_comparison.md for {req.creator_name} in {detected_lang_str} ({domain_profile.domain_name})")
             except Exception as e:
-                logger.warning(f"[Intel] Error generating user.md / hook.md: {e}")
+                logger.warning(f"[Intel] Error generating dossiers: {e}")
+
+        # Compute comparative intelligence for all top creators of this domain
+        domain_key = getattr(domain_profile, 'domain_id', 'civic_social_issues')
+        top_leaders = creator_comparator_service.get_top_creators_for_domain(domain_key)
+        domain_top_creators: List[Dict[str, Any]] = []
+        domain_leader_comparisons: List[Dict[str, Any]] = []
+        for leader in top_leaders:
+            l_name = leader.get("name", "")
+            if l_name.lower().strip() == req.creator_name.lower().strip():
+                continue
+            domain_top_creators.append({
+                "name": l_name,
+                "handle": leader.get("handle", ""),
+                "subscribers": leader.get("subscribers", ""),
+                "cross_platform_reach": leader.get("cross_platform_reach", ""),
+                "core_style": leader.get("core_style", ""),
+                "hook_archetype": leader.get("hook_archetype", "")
+            })
+            try:
+                comp_res = creator_comparator_service.compare_creators(base_creator=req.creator_name, competitor=l_name)
+                domain_leader_comparisons.append({
+                    "leader_name": l_name,
+                    "leader_handle": leader.get("handle", ""),
+                    "leader_subscribers": leader.get("subscribers", ""),
+                    "core_style": leader.get("core_style", ""),
+                    "how_they_differ": comp_res.get("content_differences", []),
+                    "how_to_improve": comp_res.get("content_improvement_playbook", []),
+                    "speech_differences": comp_res.get("speech_differences", []),
+                    "user_advantages": comp_res.get("user_advantages", [])
+                })
+            except Exception as e:
+                logger.debug(f"Leader comparison error for {l_name}: {e}")
+
+        from app.services.trends_service import trends_service
+        trending_keywords = trends_service.extract_trending_keywords(domain_profile.domain_name, limit=12)
 
         summary = self._generate_summary(req.creator_name, effective_niche, platform_blocks)
 
@@ -209,6 +255,10 @@ class PlatformIntelService:
             domain_profile=domain_profile.model_dump(),
             user_md_path=user_md_path_str,
             hook_md_path=hook_md_path_str,
+            creator_comparison_md_path=comparison_path,
+            domain_top_creators=domain_top_creators,
+            domain_leader_comparisons=domain_leader_comparisons,
+            trending_keywords=trending_keywords,
             summary=summary,
         )
 
@@ -581,28 +631,44 @@ class PlatformIntelService:
         hashtags = [h["tag"] for h in hashtag_data]
 
         domain_trends = []
-        # 1. Primary: Scrape real-time domain-relevant posts/reels via Apify
+        # 1. Option A: Scrape real-time domain Reels via Bright Data
         try:
-            apify_trends = apify_service.scrape_instagram_trends(cause_query, location, limit=6)
-            if apify_trends:
-                domain_trends.extend(apify_trends)
+            bright_trends = bright_data_service.scrape_instagram_reels(cause_query, location, limit=6)
+            if bright_trends:
+                domain_trends.extend(bright_trends)
         except Exception as e:
-            logger.debug(f"Apify Instagram trend notice: {e}")
+            logger.debug(f"Bright Data Instagram reels notice: {e}")
 
-        # 2. Supplementary/Fallback: Discover Explore reels via instagram_service
-        if not domain_trends:
-            reels_data = instagram_service.fetch_trending_reels_for_niche(cause_query, location)
-            for idx, reel in enumerate(reels_data, 1):
-                domain_trends.append(TrendItem(
-                    rank=idx,
-                    title=reel.get("title", f"Trending {cause_query} Reel"),
-                    url=reel.get("url"),
-                    platform="instagram",
-                    content_type="reel",
-                    why_trending=f"Discovered via {reel.get('source', 'Instagram Explore')}",
-                    relevance_to_niche=f"Directly relevant to {cause_query}",
-                    hashtags=[h["tag"] for h in hashtag_data[:5]],
-                ))
+        # 2. Option B: Scrape real-time domain-relevant posts/reels via Apify
+        if len(domain_trends) < 5:
+            try:
+                apify_trends = apify_service.scrape_instagram_trends(cause_query, location, limit=6)
+                if apify_trends:
+                    domain_trends.extend(apify_trends)
+            except Exception as e:
+                logger.debug(f"Apify Instagram trend notice: {e}")
+
+        # 2. Supplementary/Fallback: Ensure at least 5 rich domain Reels are always returned
+        if len(domain_trends) < 5:
+            queries_to_try = causes_or_topics[:3] if causes_or_topics else [cause_query]
+            for c_q in queries_to_try:
+                if len(domain_trends) >= 6:
+                    break
+                reels_data = instagram_service.fetch_trending_reels_for_niche(c_q, location)
+                for reel in reels_data:
+                    if len(domain_trends) >= 6:
+                        break
+                    if not any(d.title == reel.get("title") for d in domain_trends):
+                        domain_trends.append(TrendItem(
+                            rank=len(domain_trends) + 1,
+                            title=reel.get("title", f"Trending {c_q} Reel"),
+                            url=reel.get("url"),
+                            platform="instagram",
+                            content_type="reel",
+                            why_trending=f"Discovered via {reel.get('source', 'Instagram Explore')}",
+                            relevance_to_niche=f"Directly relevant to {c_q}",
+                            hashtags=[h["tag"] for h in hashtag_data[:5]],
+                        ))
 
         location_reels_data = instagram_service.fetch_trending_reels_for_niche(f"{cause_query} {location}", location)
         location_trends = []
@@ -651,21 +717,35 @@ class PlatformIntelService:
             display_name=creator_name,
         )
 
-        # 1. Primary: Scrape authentic Instagram profile metrics, verified status, and latest posts via Apify
+        # 1. Option A: Try Bright Data Profile Dataset
         try:
-            apify_prof = apify_service.scrape_instagram_profile(clean_handle)
-            if apify_prof:
-                profile.display_name = apify_prof.get("full_name") or creator_name
-                profile.bio = apify_prof.get("biography") or profile.bio
-                profile.follower_or_sub_count = apify_prof.get("followers_count")
-                profile.following_count = apify_prof.get("following_count")
-                profile.total_posts_or_videos = apify_prof.get("total_posts")
-                profile.verified = apify_prof.get("verified", False)
-                profile.profile_url = apify_prof.get("profile_url", profile.profile_url)
-                if apify_prof.get("recent_content"):
-                    profile.recent_content.extend(apify_prof["recent_content"])
+            bd_prof = bright_data_service.scrape_instagram_profile(clean_handle)
+            if bd_prof:
+                profile.display_name = bd_prof.get("full_name") or creator_name
+                profile.bio = bd_prof.get("biography") or profile.bio
+                profile.follower_or_sub_count = bd_prof.get("followers_count")
+                profile.following_count = bd_prof.get("following_count")
+                profile.total_posts_or_videos = bd_prof.get("total_posts")
+                profile.verified = bd_prof.get("verified", False)
         except Exception as e:
-            logger.debug(f"Apify Instagram profile scrape notice: {e}")
+            logger.debug(f"Bright Data profile notice: {e}")
+
+        # 2. Option B: Scrape authentic Instagram profile metrics, verified status, and latest posts via Apify
+        if not profile.follower_or_sub_count:
+            try:
+                apify_prof = apify_service.scrape_instagram_profile(clean_handle)
+                if apify_prof:
+                    profile.display_name = apify_prof.get("full_name") or creator_name
+                    profile.bio = apify_prof.get("biography") or profile.bio
+                    profile.follower_or_sub_count = apify_prof.get("followers_count")
+                    profile.following_count = apify_prof.get("following_count")
+                    profile.total_posts_or_videos = apify_prof.get("total_posts")
+                    profile.verified = apify_prof.get("verified", False)
+                    profile.profile_url = apify_prof.get("profile_url", profile.profile_url)
+                    if apify_prof.get("recent_content"):
+                        profile.recent_content.extend(apify_prof["recent_content"])
+            except Exception as e:
+                logger.debug(f"Apify Instagram profile scrape notice: {e}")
 
         # 2. Secondary: Try Composio Instagram connected account scraping
         if not profile.recent_content:
@@ -1083,6 +1163,28 @@ class PlatformIntelService:
                     hashtags=block.hashtag_trends[:5],
                     best_posting_time=self._best_time_for_platform(platform),
                 ))
+
+        # 4. Trending Keyword Recommendation (Leveraging high-velocity domain search terms)
+        from app.services.trends_service import trends_service
+        trending_kws = trends_service.extract_trending_keywords(niche, limit=5)
+        if trending_kws:
+            primary_kw = trending_kws[0]
+            if lang_code == "hi":
+                kw_hook = f"क्या आपको पता है कि '{primary_kw}' का नया बदलाव {niche} में सब कुछ बदलने वाला है?"
+            elif lang_code == "es":
+                kw_hook = f"El giro inesperado con '{primary_kw}' que transformará {niche} este año."
+            else:
+                kw_hook = f"Why the sudden surge around '{primary_kw}' changes everything for {niche} in 2026..."
+
+            recs.append(ContentRecommendation(
+                platform=platform,
+                content_type=content_type,
+                topic=f"Trending Keyword Deep Dive: {primary_kw}",
+                hook=kw_hook,
+                why_now=f"High-velocity domain trending keyword in {niche} — optimal search and retention catalyst",
+                hashtags=[f"#{primary_kw.replace(' ', '')}"] + (block.hashtag_trends[:4] if block.hashtag_trends else []),
+                best_posting_time=self._best_time_for_platform(platform),
+            ))
 
         return recs
 
