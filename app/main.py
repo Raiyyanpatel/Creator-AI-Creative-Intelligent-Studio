@@ -10,6 +10,7 @@ from app.routers.dashboard import router as dashboard_router
 from app.routers.trends import router as trends_router
 from app.routers.publish import router as publish_router
 from app.routers.intelligence import router as intelligence_router
+from app.routers.clipping import router as clipping_router
 
 # Configure clean logging
 logging.basicConfig(
@@ -57,6 +58,7 @@ app.include_router(dashboard_router)
 app.include_router(trends_router)
 app.include_router(publish_router)
 app.include_router(intelligence_router)
+app.include_router(clipping_router)
 
 @app.get("/", tags=["Health"])
 @app.get("/health", tags=["Health"])

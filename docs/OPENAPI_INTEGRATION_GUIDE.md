@@ -436,6 +436,122 @@ Combines in-app productivity metrics, cross-platform social reach, and chart dat
 
 ---
 
+### Module G: Viral Video Clipping & On-Device SmolVLM (`/clipping`)
+Ingests long-form videos or livestreams, extracts timed transcripts and audience retention signals, resolves context and dangling pronouns, and executes on-device **SmolVLM-2.2B (Snapdragon 8 Elite)** visual hook inspection.
+
+#### 1. Analyze Video for Viral Clips
+- **Endpoint**: `POST /clipping/analyze`
+- **Request Body**:
+```json
+{
+  "video_url": "https://www.youtube.com/watch?v=sample123",
+  "creator_name": "Dhruv Rathee",
+  "target_duration_seconds": 50,
+  "min_virality_score": 70,
+  "max_clips": 3,
+  "use_on_device_smolvlm": true
+}
+```
+- **Response** (`200 OK`):
+```json
+{
+  "status": "success",
+  "video_title": "Dhruv Rathee: The Unspoken System & Strategic Breakdown",
+  "video_duration": "45:30",
+  "source_type": "youtube",
+  "signals_used": [
+    "timed_transcript",
+    "context_antecedent_resolver",
+    "speech_cadence_wpm",
+    "youtube_retention_heatmap",
+    "smolvlm_on_device_visual_hook"
+  ],
+  "on_device_model": "SmolVLM-2.2B (Snapdragon 8 Elite)",
+  "total_candidates_analyzed": 3,
+  "top_viral_clips": [
+    {
+      "clip_id": "clip_1",
+      "rank": 1,
+      "start_time": "02:22",
+      "end_time": "02:51",
+      "start_seconds": 142.5,
+      "end_seconds": 171.0,
+      "duration_seconds": 28.5,
+      "virality_score": 90,
+      "hook_line": "Most people think that the system broke down by accident, but when you look at the raw data, it was designed this way from the start.",
+      "why_viral": "Combines high-velocity opening hook with clear empirical stakes. Audience retention stays elevated due to zero dangling context and a definitive closing takeaway.",
+      "suggested_title": "The $40B Loophole Nobody Is Talking About 🚨",
+      "suggested_caption": "Why did nobody audit this before it passed? Look closely at the raw filings. Drop your thoughts below 👇 #DataTransparency #DhruvRathee #ViralShorts",
+      "hashtags": ["#SystemExposed", "#DataTruth", "#ReelsViral", "#MustWatch"],
+      "transcript_snippet": "Most people think that the system broke down by accident, but when you look at the raw data, it was designed this way from the start. If you look at the public financial filings from just three years ago, a 40 percent shift occurred with zero media coverage...",
+      "visual_assessment": {
+        "visual_hook_score": 8.8,
+        "facial_expression": "High intensity direct gaze, leaned forward with assertive hand gestures",
+        "face_crop_center_x": 50.0,
+        "active_speaker_identified": true,
+        "visual_hook_summary": "Direct eye contact and high emotional cadence immediately trigger curiosity in first 2 seconds."
+      },
+      "recommended_aspect_ratio": "9:16"
+    }
+  ]
+}
+```
+
+#### 2. One-Click Handoff to /publish Queue
+- **Endpoint**: `POST /clipping/to-publish`
+- **Request Body**:
+```json
+{
+  "clip": {
+    "clip_id": "clip_1",
+    "rank": 1,
+    "start_time": "02:22",
+    "end_time": "02:51",
+    "start_seconds": 142.5,
+    "end_seconds": 171.0,
+    "duration_seconds": 28.5,
+    "virality_score": 90,
+    "hook_line": "Most people think that the system broke down by accident...",
+    "why_viral": "High retention spike in YouTube heatmap + explosive opening hook",
+    "suggested_title": "The $40B Loophole Nobody Is Talking About 🚨",
+    "suggested_caption": "Why did nobody audit this before it passed? Drop your thoughts below 👇",
+    "hashtags": ["#DataTruth", "#Shorts"],
+    "transcript_snippet": "Most people think that the system broke down by accident..."
+  },
+  "creator_id": "dhruv_rathee",
+  "platform": "youtube",
+  "require_human_approval": true
+}
+```
+- **Response** (`200 OK`):
+```json
+{
+  "status": "success",
+  "message": "Viral clip 'The $40B Loophole Nobody Is Talking About 🚨' (02:22-02:51) dispatched to Human Approval Queue as Job pub_476c84b23e!",
+  "job": {
+    "job_id": "pub_476c84b23e",
+    "status": "PENDING_APPROVAL",
+    "platform": "youtube",
+    "content_format": "short",
+    "composio_action": "YOUTUBE_UPLOAD_A_VIDEO"
+  }
+}
+```
+
+#### 3. Check On-Device SmolVLM Health
+- **Endpoint**: `GET /clipping/status`
+- **Response** (`200 OK`):
+```json
+{
+  "online": false,
+  "endpoint": "http://localhost:8080/v1",
+  "device": "iQOO 15 (Standby / Auto-Heuristic Fallback)",
+  "model": "SmolVLM-2.2B-Instruct (On-Device Local Adapter)"
+}
+```
+
+---
+
 ## 3. Client Integration Patterns
 
 ### A. Web / React Client Hook

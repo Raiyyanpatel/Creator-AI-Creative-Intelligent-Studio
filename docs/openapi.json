@@ -869,6 +869,140 @@
         }
       }
     },
+    "/clipping/analyze": {
+      "post": {
+        "tags": [
+          "Viral Video Clipping & On-Device SmolVLM"
+        ],
+        "summary": "Analyze video for viral short clips with context management & SmolVLM",
+        "description": "Ingests any video (YouTube, live stream, or direct MP4), extracts timed transcript\nand retention signals, resolves context and dangling pronouns, executes on-device\nSmolVLM visual hook verification, and returns ranked viral shorts with exact timestamps.",
+        "operationId": "analyze_video_for_clips_clipping_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipAnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClipAnalysisResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clipping/to-publish": {
+      "post": {
+        "tags": [
+          "Viral Video Clipping & On-Device SmolVLM"
+        ],
+        "summary": "Handoff viral clip to /publish Human Approval Queue",
+        "description": "Converts a chosen viral clip directly into a PublishJob inside the /publish\nHuman-In-The-Loop approval queue. Reviewers can approve or reject before Composio\ndispatches it to YouTube Shorts, Instagram Reels, or TikTok.",
+        "operationId": "send_clip_to_publish_queue_clipping_to_publish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipToPublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clipping/status": {
+      "get": {
+        "tags": [
+          "Viral Video Clipping & On-Device SmolVLM"
+        ],
+        "summary": "Check on-device SmolVLM health & connectivity on iQOO 15",
+        "description": "Pings the on-device SmolVLM server running on the Snapdragon 8 Elite (iQOO 15).\nVerifies NPU acceleration readiness and model availability.",
+        "operationId": "check_on_device_status_clipping_status_get",
+        "parameters": [
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional custom IP/port for iQOO 15",
+              "title": "Endpoint"
+            },
+            "description": "Optional custom IP/port for iQOO 15"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -945,6 +1079,162 @@
         },
         "type": "object",
         "title": "AppEngagementMetrics"
+      },
+      "ClipAnalysisRequest": {
+        "properties": {
+          "video_url": {
+            "type": "string",
+            "title": "Video Url",
+            "description": "YouTube URL, live stream replay, or MP4 URL/local path"
+          },
+          "creator_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Name",
+            "description": "Creator's display name or handle",
+            "default": "Creator"
+          },
+          "target_duration_seconds": {
+            "type": "integer",
+            "title": "Target Duration Seconds",
+            "description": "Target short duration in seconds (typically 30-60s)",
+            "default": 50
+          },
+          "min_virality_score": {
+            "type": "integer",
+            "title": "Min Virality Score",
+            "description": "Minimum score threshold to include in response (0-100)",
+            "default": 70
+          },
+          "max_clips": {
+            "type": "integer",
+            "title": "Max Clips",
+            "description": "Maximum number of top viral clips to return",
+            "default": 5
+          },
+          "use_on_device_smolvlm": {
+            "type": "boolean",
+            "title": "Use On Device Smolvlm",
+            "description": "Enable SmolVLM 2.2B on-device multimodal visual inspection",
+            "default": true
+          },
+          "on_device_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Device Endpoint",
+            "description": "Local on-device endpoint (e.g. iQOO 15 phone or Termux server)",
+            "default": "http://localhost:8080/v1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "video_url"
+        ],
+        "title": "ClipAnalysisRequest"
+      },
+      "ClipAnalysisResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status of the clipping operation",
+            "default": "success"
+          },
+          "video_title": {
+            "type": "string",
+            "title": "Video Title",
+            "description": "Extracted video title"
+          },
+          "video_duration": {
+            "type": "string",
+            "title": "Video Duration",
+            "description": "Total duration of the source video"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type",
+            "description": "Detected video source type (youtube, livestream, direct_file)"
+          },
+          "signals_used": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Signals Used",
+            "description": "List of multi-modal signals leveraged for analysis"
+          },
+          "on_device_model": {
+            "type": "string",
+            "title": "On Device Model",
+            "description": "Multimodal model deployed for visual hook verification",
+            "default": "SmolVLM-2.2B (Snapdragon 8 Elite)"
+          },
+          "total_candidates_analyzed": {
+            "type": "integer",
+            "title": "Total Candidates Analyzed",
+            "description": "Number of candidate segments evaluated"
+          },
+          "top_viral_clips": {
+            "items": {
+              "$ref": "#/components/schemas/ViralClipItem"
+            },
+            "type": "array",
+            "title": "Top Viral Clips",
+            "description": "Ranked viral clips with timestamps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "video_title",
+          "video_duration",
+          "source_type",
+          "signals_used",
+          "total_candidates_analyzed"
+        ],
+        "title": "ClipAnalysisResponse"
+      },
+      "ClipToPublishRequest": {
+        "properties": {
+          "clip": {
+            "$ref": "#/components/schemas/ViralClipItem",
+            "description": "The viral clip item to publish"
+          },
+          "creator_id": {
+            "type": "string",
+            "title": "Creator Id",
+            "description": "Creator identifier"
+          },
+          "platform": {
+            "type": "string",
+            "title": "Platform",
+            "description": "Target platform ('youtube', 'instagram', 'twitter', 'tiktok')",
+            "default": "youtube"
+          },
+          "require_human_approval": {
+            "type": "boolean",
+            "title": "Require Human Approval",
+            "description": "Enforce Human-In-The-Loop approval gate in /publish",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip",
+          "creator_id"
+        ],
+        "title": "ClipToPublishRequest"
       },
       "CompareAnyCreatorRequest": {
         "properties": {
@@ -3112,6 +3402,167 @@
           "pacing_breakdown"
         ],
         "title": "VideoLengthAnalysis"
+      },
+      "ViralClipItem": {
+        "properties": {
+          "clip_id": {
+            "type": "string",
+            "title": "Clip Id",
+            "description": "Unique clip identifier (e.g. 'clip_1')"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank",
+            "description": "Virality rank (1 = highest viral potential)"
+          },
+          "start_time": {
+            "type": "string",
+            "title": "Start Time",
+            "description": "Formatted start timestamp (MM:SS or HH:MM:SS)"
+          },
+          "end_time": {
+            "type": "string",
+            "title": "End Time",
+            "description": "Formatted end timestamp (MM:SS or HH:MM:SS)"
+          },
+          "start_seconds": {
+            "type": "number",
+            "title": "Start Seconds",
+            "description": "Start offset in seconds"
+          },
+          "end_seconds": {
+            "type": "number",
+            "title": "End Seconds",
+            "description": "End offset in seconds"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "title": "Duration Seconds",
+            "description": "Total clip duration in seconds"
+          },
+          "virality_score": {
+            "type": "integer",
+            "title": "Virality Score",
+            "description": "Composite virality score (0-100)"
+          },
+          "hook_line": {
+            "type": "string",
+            "title": "Hook Line",
+            "description": "The opening 3-second hook that captures attention"
+          },
+          "why_viral": {
+            "type": "string",
+            "title": "Why Viral",
+            "description": "Editorial rationale explaining narrative payoff and audience retention"
+          },
+          "suggested_title": {
+            "type": "string",
+            "title": "Suggested Title",
+            "description": "High-CTR title for YouTube Shorts / Instagram Reels"
+          },
+          "suggested_caption": {
+            "type": "string",
+            "title": "Suggested Caption",
+            "description": "Engagement-optimized caption with call-to-action"
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hashtags",
+            "description": "Surging hashtags for algorithmic distribution"
+          },
+          "transcript_snippet": {
+            "type": "string",
+            "title": "Transcript Snippet",
+            "description": "Full self-contained transcript snippet for this segment"
+          },
+          "visual_assessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VisualAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SmolVLM on-device visual analysis"
+          },
+          "recommended_aspect_ratio": {
+            "type": "string",
+            "title": "Recommended Aspect Ratio",
+            "description": "Target video aspect ratio",
+            "default": "9:16"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_id",
+          "rank",
+          "start_time",
+          "end_time",
+          "start_seconds",
+          "end_seconds",
+          "duration_seconds",
+          "virality_score",
+          "hook_line",
+          "why_viral",
+          "suggested_title",
+          "suggested_caption",
+          "transcript_snippet"
+        ],
+        "title": "ViralClipItem"
+      },
+      "VisualAssessment": {
+        "properties": {
+          "visual_hook_score": {
+            "type": "number",
+            "title": "Visual Hook Score",
+            "description": "Visual engagement score (0.0 to 10.0) based on facial expression and eye contact"
+          },
+          "facial_expression": {
+            "type": "string",
+            "title": "Facial Expression",
+            "description": "Observed facial expression (e.g. 'Shocked / Intense eye contact', 'Passionate debate gesture')"
+          },
+          "face_crop_center_x": {
+            "type": "number",
+            "title": "Face Crop Center X",
+            "description": "Recommended horizontal crop center percentage (0-100%) for 9:16 vertical framing",
+            "default": 50.0
+          },
+          "active_speaker_identified": {
+            "type": "boolean",
+            "title": "Active Speaker Identified",
+            "description": "Whether active speaker was confirmed in frame",
+            "default": true
+          },
+          "visual_hook_summary": {
+            "type": "string",
+            "title": "Visual Hook Summary",
+            "description": "Why the visual frame stops viewer scroll in first 3 seconds"
+          },
+          "keyframe_timestamp": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keyframe Timestamp",
+            "description": "Timestamp in seconds of the primary keyframe analyzed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visual_hook_score",
+          "facial_expression",
+          "visual_hook_summary"
+        ],
+        "title": "VisualAssessment"
       }
     }
   }
