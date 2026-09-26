@@ -24,6 +24,8 @@ class VisualAssessment(BaseModel):
     active_speaker_identified: bool = Field(True, description="Whether active speaker was confirmed in frame")
     visual_hook_summary: str = Field(..., description="Why the visual frame stops viewer scroll in first 3 seconds")
     keyframe_timestamp: Optional[float] = Field(None, description="Timestamp in seconds of the primary keyframe analyzed")
+    scene_title: Optional[str] = Field(None, description="Inferred visual scene title from frame")
+
 
 
 class SlidingWindowResult(BaseModel):

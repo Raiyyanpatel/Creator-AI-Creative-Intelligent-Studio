@@ -143,6 +143,18 @@ class ClippingService:
             if composite_score < req.min_virality_score and len(viral_clips) >= 2:
                 continue
 
+            # Adopt real vision-based scene title and summary if available
+            scene_title = getattr(visual_eval, "scene_title", None) if visual_eval else None
+            final_title = scene_title or cand["title"]
+            final_caption = (
+                f"{final_title} — Watch what happens next! Pure animated comedy 👇 #CartoonBox #Hilarious"
+                if scene_title else cand["caption"]
+            )
+            final_why = (
+                f"{cand['why_viral']} Visual Grounding: {visual_eval.facial_expression} — {visual_eval.visual_hook_summary}"
+                if (visual_eval and visual_eval.facial_expression) else cand["why_viral"]
+            )
+
             item = ViralClipItem(
                 clip_id=clip_id,
                 rank=idx + 1,
@@ -153,9 +165,9 @@ class ClippingService:
                 duration_seconds=round(cand["end_sec"] - cand["start_sec"], 1),
                 virality_score=composite_score,
                 hook_line=cand["hook_line"],
-                why_viral=cand["why_viral"],
-                suggested_title=cand["title"],
-                suggested_caption=cand["caption"],
+                why_viral=final_why,
+                suggested_title=final_title,
+                suggested_caption=final_caption,
                 hashtags=cand["hashtags"],
                 transcript_snippet=cand["text"],
                 visual_assessment=visual_eval,

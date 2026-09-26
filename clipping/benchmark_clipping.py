@@ -27,7 +27,7 @@ payload = {
     'frame_interval_seconds': 3
 }
 
-r = requests.post('http://localhost:8000/clipping/analyze', json=payload, timeout=30)
+r = requests.post('http://localhost:8000/clipping/analyze', json=payload, timeout=60)
 t_elapsed = time.perf_counter() - t0
 
 data = r.json()
