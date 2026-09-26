@@ -2,7 +2,7 @@
 Viral Video Clipping & On-Device SmolVLM Models
 ================================================
 Schemas for automated viral short detection, context management,
-and on-device SmolVLM multimodal visual hook evaluation.
+sliding window multi-frame sampling, and on-device SmolVLM multimodal visual evaluation.
 """
 
 from enum import Enum
@@ -24,6 +24,17 @@ class VisualAssessment(BaseModel):
     active_speaker_identified: bool = Field(True, description="Whether active speaker was confirmed in frame")
     visual_hook_summary: str = Field(..., description="Why the visual frame stops viewer scroll in first 3 seconds")
     keyframe_timestamp: Optional[float] = Field(None, description="Timestamp in seconds of the primary keyframe analyzed")
+
+
+class SlidingWindowResult(BaseModel):
+    window_id: str = Field(..., description="Unique window identifier (e.g. 'win_1')")
+    start_seconds: float = Field(..., description="Window start time in seconds")
+    end_seconds: float = Field(..., description="Window end time in seconds")
+    frames_count: int = Field(..., description="Number of sampled frames analyzed in this window")
+    peak_visual_timestamp: float = Field(..., description="Timestamp of highest visual/emotional energy")
+    peak_visual_score: float = Field(..., description="Highest visual engagement score in window (0-10)")
+    speaker_center_x: float = Field(50.0, description="Average face center X percentage for 9:16 cropping")
+    summary: str = Field(..., description="Summary of visual dynamics in this window")
 
 
 class ViralClipItem(BaseModel):
@@ -52,7 +63,10 @@ class ClipAnalysisRequest(BaseModel):
     min_virality_score: int = Field(70, description="Minimum score threshold to include in response (0-100)")
     max_clips: int = Field(5, description="Maximum number of top viral clips to return")
     use_on_device_smolvlm: bool = Field(True, description="Enable SmolVLM 2.2B on-device multimodal visual inspection")
-    on_device_endpoint: Optional[str] = Field("http://localhost:8080/v1", description="Local on-device endpoint (e.g. iQOO 15 phone or Termux server)")
+    on_device_endpoint: Optional[str] = Field("http://host.docker.internal:8080/v1", description="Local on-device endpoint (e.g. iQOO 15 phone or Termux server)")
+    enable_sliding_window: bool = Field(True, description="Enable sliding window multi-frame sequence sampling")
+    window_size_seconds: int = Field(120, description="Sliding window duration in seconds (typically 90-180s)")
+    frame_interval_seconds: int = Field(3, description="Sampling rate: 1 frame every N seconds (typically 2-5s)")
 
 
 class ClipAnalysisResponse(BaseModel):
@@ -62,6 +76,8 @@ class ClipAnalysisResponse(BaseModel):
     source_type: str = Field(..., description="Detected video source type (youtube, livestream, direct_file)")
     signals_used: List[str] = Field(..., description="List of multi-modal signals leveraged for analysis")
     on_device_model: str = Field("SmolVLM-2.2B (Snapdragon 8 Elite)", description="Multimodal model deployed for visual hook verification")
+    sliding_windows_analyzed: int = Field(0, description="Total sliding windows processed by SmolVLM")
+    total_frames_processed: int = Field(0, description="Total video frames sampled and evaluated")
     total_candidates_analyzed: int = Field(..., description="Number of candidate segments evaluated")
     top_viral_clips: List[ViralClipItem] = Field(default_factory=list, description="Ranked viral clips with timestamps")
 

@@ -1135,7 +1135,25 @@
             ],
             "title": "On Device Endpoint",
             "description": "Local on-device endpoint (e.g. iQOO 15 phone or Termux server)",
-            "default": "http://localhost:8080/v1"
+            "default": "http://host.docker.internal:8080/v1"
+          },
+          "enable_sliding_window": {
+            "type": "boolean",
+            "title": "Enable Sliding Window",
+            "description": "Enable sliding window multi-frame sequence sampling",
+            "default": true
+          },
+          "window_size_seconds": {
+            "type": "integer",
+            "title": "Window Size Seconds",
+            "description": "Sliding window duration in seconds (typically 90-180s)",
+            "default": 120
+          },
+          "frame_interval_seconds": {
+            "type": "integer",
+            "title": "Frame Interval Seconds",
+            "description": "Sampling rate: 1 frame every N seconds (typically 2-5s)",
+            "default": 3
           }
         },
         "type": "object",
@@ -1180,6 +1198,18 @@
             "title": "On Device Model",
             "description": "Multimodal model deployed for visual hook verification",
             "default": "SmolVLM-2.2B (Snapdragon 8 Elite)"
+          },
+          "sliding_windows_analyzed": {
+            "type": "integer",
+            "title": "Sliding Windows Analyzed",
+            "description": "Total sliding windows processed by SmolVLM",
+            "default": 0
+          },
+          "total_frames_processed": {
+            "type": "integer",
+            "title": "Total Frames Processed",
+            "description": "Total video frames sampled and evaluated",
+            "default": 0
           },
           "total_candidates_analyzed": {
             "type": "integer",

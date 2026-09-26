@@ -55,8 +55,48 @@ class ClippingService:
             signals_used.append("youtube_retention_heatmap")
         if req.use_on_device_smolvlm:
             signals_used.append("smolvlm_on_device_visual_hook")
+        if req.enable_sliding_window:
+            signals_used.append("sliding_window_multi_frame_sampling")
 
-        # 3. Discover candidate segments with context management
+        # 3. Sliding Window Multi-Frame Video Evaluation (SmolVLM on Snapdragon 8 Elite)
+        total_duration_sec = video_info.get("duration_seconds", 2535)
+        window_size = req.window_size_seconds or 120
+        stride = int(window_size * 0.75) # 25% overlap (30s)
+        interval = req.frame_interval_seconds or 3
+
+        sliding_windows = []
+        total_frames = 0
+
+        if req.enable_sliding_window and req.use_on_device_smolvlm:
+            cur_start = 0.0
+            win_idx = 1
+            # Process sliding windows across video timeline (up to 12 windows for responsive latency)
+            while cur_start < total_duration_sec and win_idx <= 12:
+                cur_end = min(total_duration_sec, cur_start + window_size)
+                frames_in_win = max(10, int((cur_end - cur_start) / interval))
+                total_frames += frames_in_win
+
+                # Find transcript text in this window
+                chunk_texts = [
+                    t["text"] for t in timed_transcript
+                    if cur_start <= t.get("start", 0) <= cur_end
+                ]
+                win_transcript = " ".join(chunk_texts) or "Video dialogue and visual movement."
+
+                win_res = smolvlm_service.evaluate_sliding_window(
+                    window_id=f"win_{win_idx}",
+                    start_seconds=cur_start,
+                    end_seconds=cur_end,
+                    frame_count=frames_in_win,
+                    frame_interval_seconds=interval,
+                    transcript_chunk=win_transcript,
+                    endpoint=req.on_device_endpoint
+                )
+                sliding_windows.append(win_res)
+                cur_start += stride
+                win_idx += 1
+
+        # 4. Discover candidate segments with context management
         candidates = self._find_candidate_segments(
             timed_transcript=timed_transcript,
             heatmap_points=heatmap_points,
@@ -64,9 +104,12 @@ class ClippingService:
             creator_name=req.creator_name
         )
 
-        logger.info(f"[Clipping] Found {len(candidates)} candidate segments. Evaluating with SmolVLM...")
+        logger.info(
+            f"[Clipping] Evaluated {len(sliding_windows)} sliding windows ({total_frames} frames). "
+            f"Found {len(candidates)} candidate segments. Evaluating with SmolVLM..."
+        )
 
-        # 4. Multimodal evaluation with SmolVLM & Virality Scoring
+        # 5. Multimodal evaluation with SmolVLM & Virality Scoring
         viral_clips: List[ViralClipItem] = []
         for idx, cand in enumerate(candidates[:req.max_clips * 2]):
             clip_id = f"clip_{idx + 1}"
@@ -125,6 +168,8 @@ class ClippingService:
             source_type=source_type.value,
             signals_used=signals_used,
             on_device_model="SmolVLM-2.2B (Snapdragon 8 Elite)",
+            sliding_windows_analyzed=len(sliding_windows),
+            total_frames_processed=total_frames,
             total_candidates_analyzed=len(candidates),
             top_viral_clips=top_clips
         )
