@@ -15,7 +15,9 @@ from app.models.intelligence import (
     IntelligenceResponse,
     PlatformChoice,
 )
+from app.models.domain import CreatorDomainProfile, IdentifyDomainRequest
 from app.services.platform_intel_service import platform_intel_service
+from app.services.domain_service import domain_service, DOMAIN_ARCHETYPES
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,8 @@ def run_intelligence_scan(req: IntelligenceRequest):
 def quick_intelligence_scan(
     creator_name: str = Query(..., description="Creator's display name"),
     niche: str = Query("Tech & AI", description="Creator's niche/domain"),
+    causes_or_topics: Optional[str] = Query(None, description="Comma-separated topics or causes of creator's work (e.g. 'Social Causes, Public Policy')"),
+    language: Optional[str] = Query(None, description="Creator's native spoken language code (e.g. 'hi', 'en', 'es')"),
     location: str = Query("US", description="Country/region code"),
     platforms: Optional[str] = Query(
         "youtube,instagram,linkedin,x_twitter",
@@ -84,9 +88,13 @@ def quick_intelligence_scan(
             PlatformChoice.X_TWITTER,
         ]
 
+    causes_list = [c.strip() for c in causes_or_topics.split(",") if c.strip()] if causes_or_topics else None
+
     req = IntelligenceRequest(
         creator_name=creator_name,
         niche=niche,
+        causes_or_topics=causes_list,
+        language=language,
         location=location,
         platforms=platform_list,
     )
@@ -102,15 +110,70 @@ def list_platforms():
     return {
         "platforms": [p.value for p in PlatformChoice],
         "goals": {
-            "instagram": "increase_reach",
-            "youtube": "increase_followers",
+            "youtube": "increase_subscribers",
+            "instagram": "more_views_and_followers",
             "linkedin": "increase_connections",
-            "x_twitter": "increase_engagement",
+            "x_twitter": "spread_domain_posts",
         },
         "description": {
-            "youtube": "Find trending videos, Shorts, and topics to increase subscribers",
-            "instagram": "Discover trending Reels, hashtags, and posts to maximize reach",
-            "linkedin": "Identify viral articles and posts to grow professional connections",
-            "x_twitter": "Surface trending threads, hashtags, and topics for engagement",
+            "youtube": "Discover trending domain + global + location videos and Shorts to increase subscribers",
+            "instagram": "Identify trending domain + global + location viral Reels to get more views and followers",
+            "linkedin": "Surface high-authority domain discussions to increase reach and build professional connections",
+            "x_twitter": "Discover domain trends and viral threads to spread domain posts and increase reach",
         },
     }
+
+
+@router.get(
+    "/domains",
+    summary="List recognized domain archetypes",
+    description="Returns all pre-built creator domains, sub-niches, and core content verticals.",
+)
+def list_domain_archetypes():
+    result = []
+    for dom_id, d in DOMAIN_ARCHETYPES.items():
+        result.append({
+            "domain_id": dom_id,
+            "domain_name": d["domain_name"],
+            "sub_niche": d["sub_niche"],
+            "core_verticals": d["core_verticals"],
+            "primary_search_topics": d["primary_search_topics"],
+            "methodology": d["investigation_methodology"]
+        })
+    return {"domains": result, "total": len(result)}
+
+
+@router.post(
+    "/identify-domain",
+    response_model=CreatorDomainProfile,
+    summary="Identify creator domain, niche, and content pillars (POST)",
+    description="Dynamically identifies any creator's domain, core verticals, target audience psychographics, competitive moat, and domain monologues.",
+)
+def identify_creator_domain_post(req: IdentifyDomainRequest):
+    return domain_service.get_creator_domain_profile(
+        creator_name=req.creator_name,
+        niche_hint=req.niche_hint,
+        sample_titles=req.sample_titles,
+        bio=req.bio,
+        language=req.language or "en",
+    )
+
+
+@router.get(
+    "/identify-domain",
+    response_model=CreatorDomainProfile,
+    summary="Identify creator domain, niche, and content pillars (GET)",
+    description="Lightweight query endpoint to quickly identify a creator's domain and niche.",
+)
+def identify_creator_domain_get(
+    creator_name: str = Query(..., description="Creator's display name or handle"),
+    niche_hint: Optional[str] = Query(None, description="Optional hint about niche if known"),
+    language: Optional[str] = Query("en", description="Target spoken language ('hi', 'en', 'es')"),
+):
+    return domain_service.get_creator_domain_profile(
+        creator_name=creator_name,
+        niche_hint=niche_hint,
+        sample_titles=None,
+        bio=None,
+        language=language or "en",
+    )

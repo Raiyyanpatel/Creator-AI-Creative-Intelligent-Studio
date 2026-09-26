@@ -36,15 +36,19 @@ from app.models.intelligence import (
     CreatorPlatformProfile,
 )
 from app.services.instagram_service import instagram_service
+from app.services.domain_service import domain_service
+from app.services.composio_scraper_service import composio_scraper_service
+from app.services.twitter_api_service import twitter_api_service
+from app.services.apify_service import apify_service
 
 logger = logging.getLogger(__name__)
 
-# Default platform goals when user doesn't specify
+# Default platform goals reflecting user growth objectives
 DEFAULT_GOALS = {
-    "instagram": "increase_reach",
-    "youtube": "increase_followers",
+    "youtube": "increase_subscribers",
+    "instagram": "more_views_and_followers",
     "linkedin": "increase_connections",
-    "x_twitter": "increase_engagement",
+    "x_twitter": "spread_domain_posts",
 }
 
 # Scraping headers
@@ -65,8 +69,24 @@ class PlatformIntelService:
     # ──────────────────────────────────────────────
 
     def run_intelligence(self, req: IntelligenceRequest) -> IntelligenceResponse:
-        """Main entry: runs all platform scrapers, generates reports, returns response."""
+        """Main entry: runs only requested platform scrapers, audits footprint, generates reports & user/hook dossiers."""
         now = datetime.now(timezone.utc).isoformat()
+
+        # 1. Dynamically identify creator's domain/niche and work pillars
+        domain_profile = domain_service.get_creator_domain_profile(
+            creator_name=req.creator_name,
+            niche_hint=req.niche,
+            sample_titles=None,
+            bio=None,
+            language=req.language or "en",
+        )
+        effective_niche = domain_profile.domain_name if (req.niche in ["auto", "", None]) else req.niche
+        causes_or_topics = req.causes_or_topics if req.causes_or_topics else domain_profile.primary_search_topics
+
+        logger.info(
+            f"[Intel] Dynamically identified domain for '{req.creator_name}': "
+            f"'{domain_profile.domain_name}' ({domain_profile.domain_id}). Primary search topics: {causes_or_topics}"
+        )
 
         platform_blocks: List[PlatformTrendsBlock] = []
         creator_profiles_dict: Dict[str, CreatorPlatformProfile] = {}
@@ -76,22 +96,23 @@ class PlatformIntelService:
         goals = req.goals or {}
         handles = req.platform_handles or {}
 
+        # Investigate ONLY requested platforms
         for platform in req.platforms:
             pname = platform.value
-            raw_goal = goals.get(pname, DEFAULT_GOALS.get(pname, "increase_reach"))
+            raw_goal = goals.get(pname, DEFAULT_GOALS.get(pname, "increase_subscribers"))
             goal = raw_goal.value if hasattr(raw_goal, "value") else str(raw_goal)
             handle = handles.get(pname, req.creator_name)
 
-            logger.info(f"[Intel] Extracting {pname} for creator={req.creator_name}, handle={handle}, niche={req.niche}")
+            logger.info(f"[Intel] Investigating {pname} for creator={req.creator_name}, handle={handle}, domain={domain_profile.domain_name}, causes={causes_or_topics}")
 
             if platform == PlatformChoice.YOUTUBE:
-                block = self._scan_youtube(req.creator_name, req.niche, req.location, handle, goal)
+                block = self._scan_youtube(req.creator_name, effective_niche, req.location, handle, goal, causes_or_topics)
             elif platform == PlatformChoice.INSTAGRAM:
-                block = self._scan_instagram(req.creator_name, req.niche, req.location, handle, goal)
+                block = self._scan_instagram(req.creator_name, effective_niche, req.location, handle, goal, causes_or_topics)
             elif platform == PlatformChoice.LINKEDIN:
-                block = self._scan_linkedin(req.creator_name, req.niche, req.location, handle, goal)
+                block = self._scan_linkedin(req.creator_name, effective_niche, req.location, handle, goal, causes_or_topics)
             elif platform == PlatformChoice.X_TWITTER:
-                block = self._scan_x_twitter(req.creator_name, req.niche, req.location, handle, goal)
+                block = self._scan_x_twitter(req.creator_name, effective_niche, req.location, handle, goal, causes_or_topics)
             else:
                 continue
 
@@ -99,15 +120,15 @@ class PlatformIntelService:
             if block.creator_profile:
                 creator_profiles_dict[pname] = block.creator_profile
 
-            # Generate content recommendations for this platform
-            recs = self._generate_recommendations(block, req.niche, pname, goal)
+            # Generate content recommendations in creator's native language
+            recs = self._generate_recommendations(block, effective_niche, pname, goal, req.language)
             recommendations.extend(recs)
 
         # Generate platform.md files if requested
         if req.generate_platform_md:
             md_files = self._generate_all_platform_md(
                 creator_name=req.creator_name,
-                niche=req.niche,
+                niche=effective_niche,
                 location=req.location,
                 blocks=platform_blocks,
                 recommendations=recommendations,
@@ -116,11 +137,66 @@ class PlatformIntelService:
                 if block.platform in md_files:
                     block.platform_md_path = md_files[block.platform]
 
-        summary = self._generate_summary(req.creator_name, req.niche, platform_blocks)
+        # Always generate / update user.md and hook.md from investigated platforms
+        user_md_path_str: Optional[str] = None
+        hook_md_path_str: Optional[str] = None
+        detected_lang_str: Optional[str] = None
+
+        if req.generate_user_hook_md:
+            try:
+                from app.services.llm_service import llm_service
+                from app.services.youtube_service import youtube_service
+
+                yt_data = None
+                if PlatformChoice.YOUTUBE in req.platforms:
+                    yt_handle = handles.get("youtube", req.creator_name)
+                    yt_data = youtube_service.fetch_creator_videos(
+                        creator_name=req.creator_name,
+                        channel_url_or_handle=yt_handle,
+                        max_videos=5
+                    )
+
+                ig_data = None
+                if PlatformChoice.INSTAGRAM in req.platforms:
+                    ig_prof = creator_profiles_dict.get("instagram")
+                    if ig_prof and ig_prof.recent_content:
+                        ig_data = {"posts": ig_prof.recent_content}
+
+                tw_data = None
+                if PlatformChoice.X_TWITTER in req.platforms:
+                    tw_prof = creator_profiles_dict.get("x_twitter")
+                    if tw_prof and tw_prof.recent_content:
+                        tw_data = {"posts": tw_prof.recent_content}
+
+                li_data = None
+                if PlatformChoice.LINKEDIN in req.platforms:
+                    li_prof = creator_profiles_dict.get("linkedin")
+                    if li_prof and li_prof.recent_content:
+                        li_data = {"posts": li_prof.recent_content}
+
+                causes_str = ", ".join(causes_or_topics) if causes_or_topics else effective_niche
+                prof_res = llm_service.profile_creator(
+                    creator_name=req.creator_name,
+                    youtube_data=yt_data or {},
+                    instagram_data=ig_data,
+                    twitter_data=tw_data,
+                    linkedin_data=li_data,
+                    custom_instructions=f"Focus on creator's domain and work pillars: {causes_str}",
+                    language=req.language,
+                    niche=effective_niche
+                )
+                user_md_path_str = prof_res["file_paths"]["user_md"]
+                hook_md_path_str = prof_res["file_paths"]["hook_md"]
+                detected_lang_str = prof_res.get("detected_language")
+                logger.info(f"[Intel] Successfully generated user.md and hook.md for {req.creator_name} in {detected_lang_str} ({domain_profile.domain_name})")
+            except Exception as e:
+                logger.warning(f"[Intel] Error generating user.md / hook.md: {e}")
+
+        summary = self._generate_summary(req.creator_name, effective_niche, platform_blocks)
 
         return IntelligenceResponse(
             creator_name=req.creator_name,
-            niche=req.niche,
+            niche=effective_niche,
             location=req.location,
             analyzed_at=now,
             platforms_analyzed=[p.value for p in req.platforms],
@@ -128,6 +204,11 @@ class PlatformIntelService:
             platform_trends=platform_blocks,
             top_recommendations=recommendations[:10],
             platform_md_files=md_files,
+            detected_language=detected_lang_str,
+            identified_domain=domain_profile.domain_name,
+            domain_profile=domain_profile.model_dump(),
+            user_md_path=user_md_path_str,
+            hook_md_path=hook_md_path_str,
             summary=summary,
         )
 
@@ -136,17 +217,18 @@ class PlatformIntelService:
     # ──────────────────────────────────────────────
 
     def _scan_youtube(
-        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str, causes_or_topics: Optional[List[str]] = None
     ) -> PlatformTrendsBlock:
         # 1. Extract creator-specific profile info
         creator_profile = self._extract_youtube_creator_profile(creator_name, handle, niche)
 
-        # 2. Discover trending videos in niche, global, and location
-        domain_trends = self._youtube_search_trending(niche, location, limit=8)
+        # 2. Discover trending videos in creator's WORK / CAUSES / DOMAIN (NOT creator's name!)
+        cause_query = causes_or_topics[0] if causes_or_topics else niche
+        domain_trends = self._youtube_search_trending(cause_query, location, limit=8)
         global_trends = self._youtube_trending_feed(location, limit=6)
-        location_trends = self._youtube_search_trending(f"{niche} {location}", location, limit=5)
+        location_trends = self._youtube_search_trending(f"{cause_query} {location}", location, limit=5)
 
-        hashtags = self._youtube_trending_hashtags(niche)
+        hashtags = self._youtube_trending_hashtags(cause_query)
         strategy = self._youtube_strategy(niche, goal)
 
         return PlatformTrendsBlock(
@@ -172,8 +254,30 @@ class PlatformIntelService:
             display_name=creator_name,
         )
 
+        # 1. Primary: Scrape YouTube channel & video uploads via Composio
+        try:
+            comp_res = composio_scraper_service.scrape_youtube_channel(clean_handle, max_videos=5)
+            if comp_res and comp_res.get("videos"):
+                profile.display_name = comp_res.get("channel_title", creator_name)
+                profile.bio = comp_res.get("description", "")
+                profile.follower_or_sub_count = comp_res.get("subscriber_count")
+                profile.total_posts_or_videos = comp_res.get("total_videos")
+                profile.verified = True
+                for v in comp_res.get("videos", []):
+                    profile.recent_content.append({
+                        "title": v.get("title", ""),
+                        "url": v.get("url"),
+                        "published_at": v.get("published_at", ""),
+                        "thumbnail": v.get("thumbnail"),
+                        "content_type": "video",
+                        "source": "composio"
+                    })
+        except Exception as e:
+            logger.debug(f"Composio YouTube scrape notice: {e}")
+
+        # 2. Secondary fallback: YouTube Data API v3
         api_key = settings.YOUTUBE_API_KEY
-        if api_key:
+        if api_key and not profile.recent_content:
             try:
                 # 1. Query channels endpoint by forHandle
                 url = "https://www.googleapis.com/youtube/v3/channels"
@@ -278,86 +382,167 @@ class PlatformIntelService:
         )
         return profile
 
+    @staticmethod
+    def _normalize_country_code(location: Optional[str]) -> str:
+        """Normalizes location strings like 'India', 'United States', 'UK' into valid ISO-3166-1 alpha-2 codes."""
+        if not location or not location.strip():
+            return "US"
+        loc = location.strip().lower()
+        mapping = {
+            "india": "IN", "in": "IN",
+            "united states": "US", "usa": "US", "us": "US", "america": "US",
+            "united kingdom": "GB", "uk": "GB", "great britain": "GB", "england": "GB", "gb": "GB",
+            "canada": "CA", "ca": "CA",
+            "australia": "AU", "au": "AU",
+            "germany": "DE", "deutschland": "DE", "de": "DE",
+            "france": "FR", "fr": "FR",
+            "spain": "ES", "es": "ES",
+            "brazil": "BR", "br": "BR",
+            "japan": "JP", "jp": "JP",
+            "south korea": "KR", "korea": "KR", "kr": "KR",
+            "uae": "AE", "united arab emirates": "AE", "dubai": "AE", "ae": "AE",
+            "singapore": "SG", "sg": "SG",
+            "indonesia": "ID", "id": "ID",
+            "pakistan": "PK", "pk": "PK",
+            "bangladesh": "BD", "bd": "BD",
+            "russia": "RU", "ru": "RU",
+            "italy": "IT", "it": "IT",
+            "mexico": "MX", "mx": "MX",
+            "netherlands": "NL", "nl": "NL",
+            "south africa": "ZA", "za": "ZA",
+            "nigeria": "NG", "ng": "NG",
+            "philippines": "PH", "ph": "PH",
+        }
+        if loc in mapping:
+            return mapping[loc]
+        if len(loc) == 2 and loc.isalpha():
+            return loc.upper()
+        return "US"
+
     def _youtube_search_trending(self, query: str, location: str, limit: int = 8) -> List[TrendItem]:
-        """Uses YouTube Data API v3 to search for trending videos in a niche."""
+        """Uses YouTube Data API v3 or Google News RSS fallback to search for trending videos in a niche."""
         api_key = settings.YOUTUBE_API_KEY
         items: List[TrendItem] = []
-        if not api_key:
-            return items
 
-        try:
-            region = location[:2].upper() if location else "US"
-            url = "https://www.googleapis.com/youtube/v3/search"
-            params = {
-                "part": "snippet",
-                "q": query,
-                "type": "video",
-                "order": "viewCount",
-                "publishedAfter": self._recent_date_iso(),
-                "regionCode": region,
-                "maxResults": limit,
-                "key": api_key,
-            }
-            with httpx.Client(timeout=10.0) as client:
-                res = client.get(url, params=params)
-                if res.status_code == 200:
-                    data = res.json()
-                    for rank, item in enumerate(data.get("items", [])[:limit], 1):
-                        snippet = item.get("snippet", {})
-                        vid_id = item.get("id", {}).get("videoId", "")
-                        items.append(TrendItem(
-                            rank=rank,
-                            title=snippet.get("title", ""),
-                            url=f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None,
-                            platform="youtube",
-                            content_type="video",
-                            published_date=snippet.get("publishedAt", ""),
-                            creator_handle=snippet.get("channelTitle", ""),
-                            why_trending=f"High view velocity in '{query}' search results",
-                            relevance_to_niche=f"Directly related to {query}",
-                            thumbnail_url=snippet.get("thumbnails", {}).get("high", {}).get("url"),
-                        ))
-        except Exception as e:
-            logger.error(f"YouTube trending search failed: {e}")
+        if api_key:
+            try:
+                region = self._normalize_country_code(location)
+                url = "https://www.googleapis.com/youtube/v3/search"
+                params = {
+                    "part": "snippet",
+                    "q": query,
+                    "type": "video",
+                    "order": "viewCount",
+                    "regionCode": region,
+                    "maxResults": limit,
+                    "key": api_key,
+                }
+                with httpx.Client(timeout=10.0) as client:
+                    res = client.get(url, params=params)
+                    if res.status_code == 200:
+                        data = res.json()
+                        for rank, item in enumerate(data.get("items", [])[:limit], 1):
+                            snippet = item.get("snippet", {})
+                            vid_id = item.get("id", {}).get("videoId", "")
+                            items.append(TrendItem(
+                                rank=rank,
+                                title=snippet.get("title", ""),
+                                url=f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None,
+                                platform="youtube",
+                                content_type="video",
+                                published_date=snippet.get("publishedAt", ""),
+                                creator_handle=snippet.get("channelTitle", ""),
+                                why_trending=f"High view velocity in '{query}' search results",
+                                relevance_to_niche=f"Directly related to {query}",
+                                thumbnail_url=snippet.get("thumbnails", {}).get("high", {}).get("url"),
+                            ))
+            except Exception as e:
+                logger.debug(f"YouTube API search error: {e}")
+
+        # Fallback to Google News RSS for YouTube videos if API returned empty
+        if not items:
+            try:
+                rss_q = f"{query} site:youtube.com"
+                rss_url = f"https://news.google.com/rss/search?q={rss_q.replace(' ', '+')}&hl=en"
+                feed = feedparser.parse(rss_url)
+                for rank, entry in enumerate(feed.entries[:limit], 1):
+                    title = entry.get("title", "").replace("- YouTube", "").strip()
+                    items.append(TrendItem(
+                        rank=rank,
+                        title=title,
+                        url=entry.get("link", ""),
+                        platform="youtube",
+                        content_type="video",
+                        published_date=entry.get("published", ""),
+                        creator_handle=entry.get("source", {}).get("title", ""),
+                        why_trending=f"Trending topic in '{query}'",
+                        relevance_to_niche=f"Directly related to {query}",
+                    ))
+            except Exception as e:
+                logger.debug(f"YouTube RSS fallback failed: {e}")
+
         return items
 
     def _youtube_trending_feed(self, location: str, limit: int = 6) -> List[TrendItem]:
-        """Fetches YouTube's official trending feed via API."""
+        """Fetches YouTube's official trending feed via API, with Google News RSS fallback."""
         api_key = settings.YOUTUBE_API_KEY
         items: List[TrendItem] = []
-        if not api_key:
-            return items
-        try:
-            region = location[:2].upper() if location else "US"
-            url = "https://www.googleapis.com/youtube/v3/videos"
-            params = {
-                "part": "snippet,statistics",
-                "chart": "mostPopular",
-                "regionCode": region,
-                "maxResults": limit,
-                "key": api_key,
-            }
-            with httpx.Client(timeout=10.0) as client:
-                res = client.get(url, params=params)
-                if res.status_code == 200:
-                    data = res.json()
-                    for rank, vid in enumerate(data.get("items", [])[:limit], 1):
-                        snippet = vid.get("snippet", {})
-                        stats = vid.get("statistics", {})
-                        items.append(TrendItem(
-                            rank=rank,
-                            title=snippet.get("title", ""),
-                            url=f"https://www.youtube.com/watch?v={vid.get('id', '')}",
-                            platform="youtube",
-                            content_type="video",
-                            views_or_engagement=f"{int(stats.get('viewCount', 0)):,} views",
-                            published_date=snippet.get("publishedAt", ""),
-                            creator_handle=snippet.get("channelTitle", ""),
-                            why_trending="YouTube Trending chart (official)",
-                            thumbnail_url=snippet.get("thumbnails", {}).get("high", {}).get("url"),
-                        ))
-        except Exception as e:
-            logger.error(f"YouTube trending feed failed: {e}")
+        region = self._normalize_country_code(location)
+
+        if api_key:
+            try:
+                url = "https://www.googleapis.com/youtube/v3/videos"
+                params = {
+                    "part": "snippet,statistics",
+                    "chart": "mostPopular",
+                    "regionCode": region,
+                    "maxResults": limit,
+                    "key": api_key,
+                }
+                with httpx.Client(timeout=10.0) as client:
+                    res = client.get(url, params=params)
+                    if res.status_code == 200:
+                        data = res.json()
+                        for rank, vid in enumerate(data.get("items", [])[:limit], 1):
+                            snippet = vid.get("snippet", {})
+                            stats = vid.get("statistics", {})
+                            items.append(TrendItem(
+                                rank=rank,
+                                title=snippet.get("title", ""),
+                                url=f"https://www.youtube.com/watch?v={vid.get('id', '')}",
+                                platform="youtube",
+                                content_type="video",
+                                views_or_engagement=f"{int(stats.get('viewCount', 0)):,} views",
+                                published_date=snippet.get("publishedAt", ""),
+                                creator_handle=snippet.get("channelTitle", ""),
+                                why_trending="YouTube Trending chart (official)",
+                                thumbnail_url=snippet.get("thumbnails", {}).get("high", {}).get("url"),
+                            ))
+            except Exception as e:
+                logger.warning(f"YouTube trending feed API failed: {e}")
+
+        # Fallback to Google News RSS for global/regional YouTube trending if API fails or quota exceeded
+        if not items:
+            try:
+                rss_q = f"trending videos site:youtube.com"
+                rss_url = f"https://news.google.com/rss/search?q={rss_q.replace(' ', '+')}&hl=en"
+                feed = feedparser.parse(rss_url)
+                for rank, entry in enumerate(feed.entries[:limit], 1):
+                    title = entry.get("title", "").replace("- YouTube", "").strip()
+                    items.append(TrendItem(
+                        rank=rank,
+                        title=title,
+                        url=entry.get("link", ""),
+                        platform="youtube",
+                        content_type="video",
+                        published_date=entry.get("published", ""),
+                        creator_handle=entry.get("source", {}).get("title", "YouTube Trending"),
+                        why_trending=f"High velocity trend in {region}",
+                        relevance_to_niche="Popular video",
+                    ))
+            except Exception as e:
+                logger.debug(f"YouTube trending feed RSS fallback failed: {e}")
+
         return items
 
     def _youtube_trending_hashtags(self, niche: str) -> List[str]:
@@ -373,13 +558,13 @@ class PlatformIntelService:
 
     def _youtube_strategy(self, niche: str, goal: str) -> str:
         return (
-            f"**YouTube Strategy for '{niche}' (Goal: {goal})**\n"
-            f"• Post 2-3 Shorts/week + 1 long-form/week for maximum algorithmic surface area\n"
-            f"• First 30 seconds are critical — use pattern-interrupt hooks\n"
-            f"• Optimize titles for search: include primary keyword + emotional trigger\n"
-            f"• Use end screens & pinned comments to drive subscriptions\n"
-            f"• Engage with comments in first 60 minutes (boosts recommendations)\n"
-            f"• Thumbnail: high-contrast, 3-word max, expressive face close-up"
+            f"**YouTube Strategy for '{niche}' (Core Goal: 👥 Increase Subscribers)**\n"
+            f"• Publish 2-3 Shorts weekly directly converting to long-form deep-dives via related video links to maximize new subscriber acquisition\n"
+            f"• Opening 0-5s: Deliver instant high-clarity hook stating the exact truth/system without rambling intro greetings\n"
+            f"• Mid-roll Subscribe Anchor: Insert verbal and visual subscribe prompt at the peak curiosity climax (minute 4-6) when value is highest\n"
+            f"• End Screens & Pinned Comment: Direct viewer to a curated 3-part playlist to trigger binge-watching loops (the #1 subscriber growth driver)\n"
+            f"• Search-Optimized Titles: Combine the core civic/domain problem + provocative curiosity question (e.g. 'The Real Truth Behind [Issue]')\n"
+            f"• High-CTR Thumbnails: High contrast, maximum 3 words, expressive direct gaze, single clear focal evidence object"
         )
 
     # ──────────────────────────────────────────────
@@ -387,48 +572,68 @@ class PlatformIntelService:
     # ──────────────────────────────────────────────
 
     def _scan_instagram(
-        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str, causes_or_topics: Optional[List[str]] = None
     ) -> PlatformTrendsBlock:
-        # 1. Extract creator-specific profile info
         creator_profile = self._extract_instagram_creator_profile(creator_name, handle, niche)
 
-        # 2. Discover trending hashtags and reels
-        hashtag_data = instagram_service.fetch_trending_hashtags_for_niche(niche, location)
+        cause_query = causes_or_topics[0] if causes_or_topics else niche
+        hashtag_data = instagram_service.fetch_trending_hashtags_for_niche(cause_query, location)
         hashtags = [h["tag"] for h in hashtag_data]
 
-        reels_data = instagram_service.fetch_trending_reels_for_niche(niche, location)
         domain_trends = []
-        for idx, reel in enumerate(reels_data, 1):
-            domain_trends.append(TrendItem(
+        # 1. Primary: Scrape real-time domain-relevant posts/reels via Apify
+        try:
+            apify_trends = apify_service.scrape_instagram_trends(cause_query, location, limit=6)
+            if apify_trends:
+                domain_trends.extend(apify_trends)
+        except Exception as e:
+            logger.debug(f"Apify Instagram trend notice: {e}")
+
+        # 2. Supplementary/Fallback: Discover Explore reels via instagram_service
+        if not domain_trends:
+            reels_data = instagram_service.fetch_trending_reels_for_niche(cause_query, location)
+            for idx, reel in enumerate(reels_data, 1):
+                domain_trends.append(TrendItem(
+                    rank=idx,
+                    title=reel.get("title", f"Trending {cause_query} Reel"),
+                    url=reel.get("url"),
+                    platform="instagram",
+                    content_type="reel",
+                    why_trending=f"Discovered via {reel.get('source', 'Instagram Explore')}",
+                    relevance_to_niche=f"Directly relevant to {cause_query}",
+                    hashtags=[h["tag"] for h in hashtag_data[:5]],
+                ))
+
+        location_reels_data = instagram_service.fetch_trending_reels_for_niche(f"{cause_query} {location}", location)
+        location_trends = []
+        for idx, reel in enumerate(location_reels_data[:5], 1):
+            location_trends.append(TrendItem(
                 rank=idx,
-                title=reel.get("title", f"Trending {niche} Reel"),
+                title=reel.get("title", f"Viral {location} Reel"),
                 url=reel.get("url"),
                 platform="instagram",
                 content_type="reel",
-                why_trending=f"Discovered via {reel.get('source', 'Instagram Explore')}",
-                relevance_to_niche=f"Directly relevant to {niche}",
-                hashtags=[h["tag"] for h in hashtag_data[:5]],
+                why_trending=f"Trending in {location}",
+                relevance_to_niche=f"Location viral reel ({location})"
             ))
 
         global_trends = self._google_trends_rss(location, limit=5, platform_label="instagram")
 
-        strategy_data = instagram_service.get_reel_strategy(niche, goal)
         strategy_lines = [
-            f"**Instagram Strategy for '{niche}' (Goal: {goal})**",
-            f"• Optimal Reel Length: {strategy_data.get('optimal_length', '7-15s')}",
-            f"• Best Posting Times: {', '.join(strategy_data.get('best_posting_times', []))}",
-            f"• Caption Strategy: {strategy_data.get('caption_strategy', '')}",
-            f"• Audio Strategy: {strategy_data.get('audio_strategy', '')}",
+            f"**Instagram Strategy for '{niche}' (Core Goal: 🚀 Get More Views & Followers)**",
+            f"• Reels-First Distribution: Allocate 80% of production to 7-15s fast-looping Reels to trigger the Explore algorithm",
+            f"• Visual Accessibility: 80% of users watch without sound — use high-contrast kinetic subtitles and bold hook text overlays in 0-2s",
+            f"• Trending Sound Adoption: Layer emerging trending audio at 5-10% volume behind spoken audio within 24h of release",
+            f"• Follower Conversion CTA: Conclude with a clear reason to follow: 'Follow for daily ground-reality breakdowns and unbiased facts'",
+            f"• Optimal Posting Windows: 6:00 PM - 8:30 PM (peak mobile leisure hours)",
         ]
-        for tactic in strategy_data.get("engagement_tactics", [])[:4]:
-            strategy_lines.append(f"• {tactic}")
 
         return PlatformTrendsBlock(
             platform="instagram",
             goal=goal,
             creator_profile=creator_profile,
             domain_trends=domain_trends,
-            location_trends=[],
+            location_trends=location_trends,
             global_trends=global_trends,
             hashtag_trends=hashtags,
             content_strategy="\n".join(strategy_lines),
@@ -446,39 +651,72 @@ class PlatformIntelService:
             display_name=creator_name,
         )
 
+        # 1. Primary: Scrape authentic Instagram profile metrics, verified status, and latest posts via Apify
         try:
-            ddg_url = "https://html.duckduckgo.com/html/"
-            query = f"site:instagram.com/{clean_handle}"
-            with httpx.Client(timeout=8.0) as client:
-                r = client.post(ddg_url, data={"q": query}, headers=HEADERS)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.text, "html.parser")
-                    for a in soup.find_all("div", class_="result"):
-                        snip_el = a.find("a", class_="result__snippet")
-                        if not snip_el:
-                            continue
-                        snip = snip_el.get_text(strip=True)
-
-                        m = re.search(r"([0-9\.,MKkmb]+)\s+Followers[,\s]+([0-9\.,MKkmb]+)\s+Following[,\s]+([0-9\.,MKkmb]+)\s+Posts", snip, re.I)
-                        if m and not profile.follower_or_sub_count:
-                            profile.follower_or_sub_count = f"{m.group(1)} followers"
-                            profile.following_count = f"{m.group(2)} following"
-                            profile.total_posts_or_videos = f"{m.group(3)} posts"
-                            bio_m = re.search(r'"([^"]+)"', snip)
-                            if bio_m:
-                                profile.bio = bio_m.group(1)
-
-                        post_m = re.search(r"([0-9\.,MKkmb]+)\s+likes?,\s+([0-9\.,MKkmb]+)\s+comments?\s+-\s+([^:]+)\s*:\s*\"([^\"]+)\"", snip, re.I)
-                        if post_m:
-                            profile.recent_content.append({
-                                "likes": post_m.group(1),
-                                "comments": post_m.group(2),
-                                "meta": post_m.group(3).strip(),
-                                "caption": post_m.group(4).strip(),
-                                "content_type": "post_or_reel"
-                            })
+            apify_prof = apify_service.scrape_instagram_profile(clean_handle)
+            if apify_prof:
+                profile.display_name = apify_prof.get("full_name") or creator_name
+                profile.bio = apify_prof.get("biography") or profile.bio
+                profile.follower_or_sub_count = apify_prof.get("followers_count")
+                profile.following_count = apify_prof.get("following_count")
+                profile.total_posts_or_videos = apify_prof.get("total_posts")
+                profile.verified = apify_prof.get("verified", False)
+                profile.profile_url = apify_prof.get("profile_url", profile.profile_url)
+                if apify_prof.get("recent_content"):
+                    profile.recent_content.extend(apify_prof["recent_content"])
         except Exception as e:
-            logger.debug(f"Instagram profile extraction error: {e}")
+            logger.debug(f"Apify Instagram profile scrape notice: {e}")
+
+        # 2. Secondary: Try Composio Instagram connected account scraping
+        if not profile.recent_content:
+            try:
+                comp_ig = composio_scraper_service.scrape_instagram_profile(clean_handle)
+                if comp_ig and comp_ig.get("recent_posts"):
+                    for p in comp_ig["recent_posts"]:
+                        profile.recent_content.append({
+                            "caption": p.get("caption", ""),
+                            "url": p.get("url"),
+                            "content_type": "post_or_reel",
+                            "source": "composio"
+                        })
+            except Exception as e:
+                logger.debug(f"Composio Instagram scrape notice: {e}")
+
+        # 3. Tertiary fallback: DuckDuckGo public snippet & Google News
+        if not profile.follower_or_sub_count:
+            try:
+                ddg_url = "https://html.duckduckgo.com/html/"
+                query = f"site:instagram.com/{clean_handle}"
+                with httpx.Client(timeout=8.0) as client:
+                    r = client.post(ddg_url, data={"q": query}, headers=HEADERS)
+                    if r.status_code == 200:
+                        soup = BeautifulSoup(r.text, "html.parser")
+                        for a in soup.find_all("div", class_="result"):
+                            snip_el = a.find("a", class_="result__snippet")
+                            if not snip_el:
+                                continue
+                            snip = snip_el.get_text(strip=True)
+
+                            m = re.search(r"([0-9\.,MKkmb]+)\s+Followers[,\s]+([0-9\.,MKkmb]+)\s+Following[,\s]+([0-9\.,MKkmb]+)\s+Posts", snip, re.I)
+                            if m and not profile.follower_or_sub_count:
+                                profile.follower_or_sub_count = f"{m.group(1)} followers"
+                                profile.following_count = f"{m.group(2)} following"
+                                profile.total_posts_or_videos = f"{m.group(3)} posts"
+                                bio_m = re.search(r'"([^"]+)"', snip)
+                                if bio_m:
+                                    profile.bio = bio_m.group(1)
+
+                            post_m = re.search(r"([0-9\.,MKkmb]+)\s+likes?,\s+([0-9\.,MKkmb]+)\s+comments?\s+-\s+([^:]+)\s*:\s*\"([^\"]+)\"", snip, re.I)
+                            if post_m:
+                                profile.recent_content.append({
+                                    "likes": post_m.group(1),
+                                    "comments": post_m.group(2),
+                                    "meta": post_m.group(3).strip(),
+                                    "caption": post_m.group(4).strip(),
+                                    "content_type": "post_or_reel"
+                                })
+            except Exception as e:
+                logger.debug(f"Instagram profile extraction error: {e}")
 
         if not profile.recent_content:
             try:
@@ -507,23 +745,35 @@ class PlatformIntelService:
     # ──────────────────────────────────────────────
 
     def _scan_linkedin(
-        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str, causes_or_topics: Optional[List[str]] = None
     ) -> PlatformTrendsBlock:
         creator_profile = self._extract_linkedin_creator_profile(creator_name, handle, niche)
-        domain_trends = self._linkedin_trending_articles(niche, location)
+        cause_query = causes_or_topics[0] if causes_or_topics else niche
+        
+        domain_trends = []
+        # 1. Primary: Scrape real-time domain discussions via Apify LinkedIn actor
+        try:
+            apify_li = apify_service.scrape_linkedin_trends(cause_query, location, limit=6)
+            if apify_li:
+                domain_trends.extend(apify_li)
+        except Exception as e:
+            logger.debug(f"Apify LinkedIn trend notice: {e}")
+
+        # 2. Supplementary/Fallback: Google News for LinkedIn articles
+        if not domain_trends:
+            domain_trends = self._linkedin_trending_articles(cause_query, location)
+
         global_trends = self._google_trends_rss(location, limit=5, platform_label="linkedin")
-        hashtags = self._linkedin_trending_hashtags(niche)
+        hashtags = self._linkedin_trending_hashtags(cause_query)
 
         strategy = (
-            f"**LinkedIn Strategy for '{niche}' (Goal: {goal})**\n"
-            f"• Post 3-5x/week — LinkedIn's algorithm strongly favors consistent posters\n"
-            f"• Ideal post format: Short hook line → whitespace → 3-5 insight bullets → CTA question\n"
-            f"• Document/carousel posts get 3x more reach than text-only\n"
-            f"• Comment on 10-15 posts in your niche daily (drive profile views → follows)\n"
-            f"• Best posting times: 7:30-8:30 AM or 5:00-6:00 PM (local timezone)\n"
-            f"• Use 3-5 hashtags max (LinkedIn penalizes hashtag stuffing)\n"
-            f"• Video posts get 5x engagement — especially under 90 seconds\n"
-            f"• Newsletter feature: launch a LinkedIn Newsletter for subscriber lock-in"
+            f"**LinkedIn Strategy for '{niche}' (Core Goal: 🤝 Increase Reach & Connections, Spread Domain Insights)**\n"
+            f"• High-Authority Domain Posts: Share 3-5x/week breaking down critical issues in '{cause_query}' with objective data\n"
+            f"• High-Converting Hook: First 2 lines before 'see more' must highlight an urgent industry problem or surprising statistic\n"
+            f"• Connection Multiplier: End every post with an open question prompting professionals to comment, triggering 2nd-degree feed distribution\n"
+            f"• Document/PDF Carousels: Convert detailed research into 5-8 slide visual breakdowns (achieves 3x greater dwell time)\n"
+            f"• Targeted Networking: Engage thoughtfully on 10 top creators/industry voices in '{cause_query}' daily to drive organic profile visits\n"
+            f"• Optimal Posting Times: 7:30-8:30 AM or 5:00-6:00 PM (local timezone)"
         )
 
         return PlatformTrendsBlock(
@@ -551,6 +801,17 @@ class PlatformIntelService:
             profile_url=f"https://www.linkedin.com/in/{clean_vanity}",
             display_name=creator_name,
         )
+
+        # 1. Primary: Try Composio LinkedIn connected account scraping
+        try:
+            comp_li = composio_scraper_service.scrape_linkedin_profile(clean_vanity)
+            if comp_li:
+                profile.display_name = comp_li.get("full_name", creator_name)
+                profile.bio = comp_li.get("headline", "")
+                profile.profile_url = comp_li.get("profile_url", profile.profile_url)
+                profile.verified = True
+        except Exception as e:
+            logger.debug(f"Composio LinkedIn scrape notice: {e}")
 
         try:
             q = f"site:linkedin.com {creator_name or clean_vanity}"
@@ -617,23 +878,21 @@ class PlatformIntelService:
     # ──────────────────────────────────────────────
 
     def _scan_x_twitter(
-        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str, causes_or_topics: Optional[List[str]] = None
     ) -> PlatformTrendsBlock:
         creator_profile = self._extract_x_creator_profile(creator_name, handle, niche)
-        domain_trends = self._x_niche_trends(niche, location)
+        cause_query = causes_or_topics[0] if causes_or_topics else niche
+        domain_trends = self._x_niche_trends(cause_query, location)
         global_trends = self._google_trends_rss(location, limit=5, platform_label="x_twitter")
-        hashtags = self._x_trending_hashtags(niche)
+        hashtags = self._x_trending_hashtags(cause_query)
 
         strategy = (
-            f"**X (Twitter) Strategy for '{niche}' (Goal: {goal})**\n"
-            f"• Tweet 3-5x/day — X rewards high-frequency, high-engagement accounts\n"
-            f"• Thread format: Hook tweet → 4-7 value tweets → CTA (retweet/bookmark)\n"
-            f"• Optimal engagement times: 8-10 AM, 12-1 PM, 5-6 PM (target timezone)\n"
-            f"• Use quote tweets to join trending conversations in your niche\n"
-            f"• Image/video tweets get 2.5x more engagement than text-only\n"
-            f"• Long-form posts (X Premium): use for deep-dive thought pieces\n"
-            f"• Engage with top 20 accounts in your niche daily (comment, not just like)\n"
-            f"• Spaces: host weekly 30-min Spaces for community + authority building"
+            f"**X (Twitter) Strategy for '{niche}' (Core Goal: 🌐 Increase Reach & Spread Domain Awareness)**\n"
+            f"• Daily Domain Drops: Post 2-3 single-punch insights or infographics daily discussing key developments in '{cause_query}'\n"
+            f"• High-Impact Viral Threads: Publish 1 weekly 5-8 tweet deep-dive on a pressing cause topic optimized for bookmark saves\n"
+            f"• Pattern-Interrupt Opening Hook: Strong declarative statement challenging a common narrative, backed by immediate evidence\n"
+            f"• Community & Connections: Quote-tweet trending discussions in '{cause_query}', tagging relevant researchers or organizations\n"
+            f"• Clear Domain Spread CTA: Conclude threads asking viewers to Retweet/Repost if they believe this issue needs public visibility"
         )
 
         return PlatformTrendsBlock(
@@ -650,81 +909,16 @@ class PlatformIntelService:
     def _extract_x_creator_profile(
         self, creator_name: str, handle: str, niche: str
     ) -> CreatorPlatformProfile:
-        """Extracts X/Twitter handle, recent tweets, and viral threads."""
+        """Extracts authentic X/Twitter metrics, followers, and recent tweets via Twitter API v2 with Bearer Token."""
         clean_handle = handle.replace("@", "").strip() if handle else re.sub(r'[^a-zA-Z0-9_]', '', creator_name.lower())
         if "x.com/" in clean_handle or "twitter.com/" in clean_handle:
             clean_handle = clean_handle.split("/")[-1].replace("@", "")
 
-        profile = CreatorPlatformProfile(
-            platform="x_twitter",
-            handle=f"@{clean_handle}",
-            profile_url=f"https://x.com/{clean_handle}",
-            display_name=creator_name,
-        )
-
-        # Attempt syndication timeline fetch
-        try:
-            syn_url = f"https://syndication.twitter.com/srv/timeline-profile/screen-name/{clean_handle}"
-            with httpx.Client(timeout=5.0) as client:
-                r = client.get(syn_url, headers=HEADERS)
-                if r.status_code == 200:
-                    soup = BeautifulSoup(r.text, "html.parser")
-                    for art in soup.find_all("article")[:4]:
-                        txt = art.get_text(" ", strip=True)
-                        if txt:
-                            profile.recent_content.append({
-                                "text": txt[:250],
-                                "url": f"https://x.com/{clean_handle}",
-                                "content_type": "tweet"
-                            })
-        except Exception:
-            pass
-
-        # Fallback to Google News RSS
-        if not profile.recent_content:
-            try:
-                q = f"{creator_name or clean_handle} tweet OR thread"
-                feed_url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en"
-                feed = feedparser.parse(feed_url)
-                for entry in feed.entries[:4]:
-                    profile.recent_content.append({
-                        "title": entry.get("title", ""),
-                        "url": entry.get("link", ""),
-                        "published_at": entry.get("published", ""),
-                        "content_type": "tweet_mention"
-                    })
-            except Exception as e:
-                logger.debug(f"X profile extraction fallback error: {e}")
-
-        profile.growth_gap_analysis = (
-            f"X footprint (@{clean_handle}): High opportunity in '{niche}' by publishing 1 signature thread weekly "
-            f"optimized for bookmark saves (which algorithmically boosts account authority 5x over retweets), "
-            f"supported by daily observational commentary."
-        )
-        return profile
+        return twitter_api_service.extract_creator_profile(creator_name, clean_handle, niche)
 
     def _x_niche_trends(self, niche: str, location: str) -> List[TrendItem]:
-        """Discovers X/Twitter trending content via Google News RSS for the niche."""
-        items: List[TrendItem] = []
-        try:
-            query = f"{niche} viral twitter thread {location}"
-            search_url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en"
-            feed = feedparser.parse(search_url)
-            for rank, entry in enumerate(feed.entries[:6], 1):
-                items.append(TrendItem(
-                    rank=rank,
-                    title=entry.get("title", ""),
-                    url=entry.get("link", ""),
-                    platform="x_twitter",
-                    content_type="thread",
-                    published_date=entry.get("published", ""),
-                    creator_handle=entry.get("source", {}).get("title", ""),
-                    why_trending="Trending in Google News for X/Twitter",
-                    relevance_to_niche=f"Relevant to {niche}",
-                ))
-        except Exception as e:
-            logger.debug(f"X trending scrape failed: {e}")
-        return items
+        """Discovers trending X/Twitter discussions via Twitter API v2 with Bearer Token, with RSS fallback."""
+        return twitter_api_service.search_domain_tweets(niche, location, limit=8)
 
     def _x_trending_hashtags(self, niche: str) -> List[str]:
         niche_lower = niche.lower()
@@ -780,39 +974,115 @@ class PlatformIntelService:
         niche: str,
         platform: str,
         goal: str,
+        language: Optional[str] = None,
     ) -> List[ContentRecommendation]:
-        """Generates actionable content recommendations from discovered trends."""
+        """Generates actionable content recommendations from discovered domain, global, and location trends in creator's native language."""
+        from app.services.language_service import language_service
+
+        # Resolve language code ('hi', 'es', 'en')
+        text_samples = [t.title for t in block.domain_trends]
+        if block.creator_profile and block.creator_profile.recent_content:
+            text_samples.extend([str(c.get("title") or c.get("text") or c.get("caption") or "") for c in block.creator_profile.recent_content])
+        
+        creator_name = block.creator_profile.display_name if block.creator_profile else ""
+        lang_code = language_service.detect_language(creator_name, text_samples, requested_language=language)
+        lang_pack = language_service.get_language_pack(lang_code)
+        native_hooks = lang_pack.get("hooks", [])
+
         recs: List[ContentRecommendation] = []
 
-        # Pick top domain trends
-        for trend in block.domain_trends[:3]:
-            content_types = {
-                "youtube": "video",
-                "instagram": "reel",
-                "linkedin": "post",
-                "x_twitter": "thread",
-            }
+        # 1. Domain Trends Recommendations (Focus: Creator's work / causes / domain)
+        content_types = {
+            "youtube": "video",
+            "instagram": "reel",
+            "linkedin": "post",
+            "x_twitter": "thread",
+        }
+        content_type = content_types.get(platform, "post")
+
+        for idx, trend in enumerate(block.domain_trends[:3]):
+            if lang_code == "hi":
+                hook_options = [
+                    f"क्या आपने कभी सोचा है कि '{trend.title}' के पीछे की असली सच्चाई क्या है?",
+                    f"सच तो यह है कि '{trend.title}' के बारे में 99% लोग गलत सोचते हैं...",
+                    f"'{trend.title}' का पूरा सच: डेटा और आधिकारिक सबूतों के साथ विश्लेषण।"
+                ]
+                hook = hook_options[idx % len(hook_options)]
+            elif lang_code == "es":
+                hook_options = [
+                    f"¿Alguna vez te has preguntado cuál es la verdadera razón detrás de '{trend.title}'?",
+                    f"La verdad oculta sobre '{trend.title}' que nadie se atreve a decir en voz alta.",
+                    f"El 99% de las personas están equivocadas sobre '{trend.title}'..."
+                ]
+                hook = hook_options[idx % len(hook_options)]
+            else:
+                hook_options = [
+                    f"The hidden truth about '{trend.title}' that nobody in {niche} is talking about.",
+                    f"What if everything you've been told about '{trend.title}' is completely backwards?",
+                    f"Here is the single data point that changed my entire perspective on '{trend.title}'."
+                ]
+                hook = hook_options[idx % len(hook_options)]
+
+            # Platform-tailored rationale
+            if platform == "youtube":
+                why_now = "High-intent searchable domain trend — optimized to convert viewers into new subscribers"
+            elif platform == "instagram":
+                why_now = "High-velocity domain issue — visual hook engineered to maximize explore views & profile followers"
+            elif platform == "linkedin":
+                why_now = "Authoritative domain insight — structured to drive reach, comments, and high-value professional connections"
+            elif platform == "x_twitter":
+                why_now = "Urgent domain development — crafted as a bookmark-optimized thread to spread domain awareness"
+            else:
+                why_now = trend.why_trending or "High-relevance trending topic in creator's domain"
+
             recs.append(ContentRecommendation(
                 platform=platform,
-                content_type=content_types.get(platform, "post"),
+                content_type=content_type,
                 topic=trend.title,
-                hook=f"The hidden truth about '{trend.title}' that nobody in {niche} is talking about.",
-                why_now=trend.why_trending or "Currently trending in your niche",
+                hook=hook,
+                why_now=why_now,
                 hashtags=trend.hashtags or block.hashtag_trends[:5],
                 best_posting_time=self._best_time_for_platform(platform),
             ))
 
-        # Pick top global trend and create a niche crossover
+        # 2. Global Trends Recommendation (Cross-niche bridge to capture massive search volume)
         for trend in block.global_trends[:1]:
+            if lang_code == "hi":
+                global_hook = f"पूरी दुनिया में '{trend.title}' की चर्चा है — लेकिन हमारे {niche} पर इसका क्या असर होगा? आइए सच जानते हैं।"
+            elif lang_code == "es":
+                global_hook = f"Todo el mundo está hablando de '{trend.title}'. Esto es lo que realmente significa para {niche}."
+            else:
+                global_hook = f"Everyone is talking about '{trend.title}'. Here's the critical breakdown for {niche}."
+
             recs.append(ContentRecommendation(
                 platform=platform,
-                content_type="hot_take",
+                content_type="hot_take" if platform in ["youtube", "instagram"] else "analysis",
                 topic=f"{trend.title} × {niche}",
-                hook=f"Everyone is talking about '{trend.title}'. Here's what it means for {niche}.",
-                why_now="Global trending topic — high search volume right now",
+                hook=global_hook,
+                why_now="Global viral phenomenon — ride mainstream momentum to expand reach beyond core follower base",
                 hashtags=block.hashtag_trends[:5],
                 best_posting_time=self._best_time_for_platform(platform),
             ))
+
+        # 3. Location Trends Recommendation (Specifically for YouTube & Instagram)
+        if platform in ["youtube", "instagram"] and block.location_trends:
+            for trend in block.location_trends[:1]:
+                if lang_code == "hi":
+                    loc_hook = f"ग्राउंड रियलिटी: '{trend.title}' को लेकर जमीनी स्तर पर क्या हालात हैं? देखिए यह खास रिपोर्ट।"
+                elif lang_code == "es":
+                    loc_hook = f"La realidad local sobre '{trend.title}'. Un análisis urgente sobre el terreno."
+                else:
+                    loc_hook = f"The ground reality behind '{trend.title}' that mainstream local coverage is missing."
+
+                recs.append(ContentRecommendation(
+                    platform=platform,
+                    content_type="video" if platform == "youtube" else "reel",
+                    topic=trend.title,
+                    hook=loc_hook,
+                    why_now="Regional trending velocity — triggers location-based algorithmic feed distribution for rapid views and subs",
+                    hashtags=block.hashtag_trends[:5],
+                    best_posting_time=self._best_time_for_platform(platform),
+                ))
 
         return recs
 
@@ -881,7 +1151,10 @@ class PlatformIntelService:
         goal_display = {
             "increase_reach": "📈 Increase Reach",
             "increase_followers": "👥 Increase Followers",
+            "increase_subscribers": "👥 Increase Subscribers",
+            "more_views_and_followers": "🚀 More Views & Followers",
             "increase_connections": "🤝 Increase Connections",
+            "spread_domain_posts": "🌐 Spread Domain Posts",
             "increase_engagement": "💬 Increase Engagement",
             "brand_authority": "👑 Build Brand Authority",
         }.get(block.goal or "", block.goal or "General Growth")

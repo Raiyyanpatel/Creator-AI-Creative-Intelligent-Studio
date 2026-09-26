@@ -10,6 +10,7 @@ import re
 from typing import List, Dict, Any, Optional
 import httpx
 from bs4 import BeautifulSoup
+import feedparser
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,35 @@ class InstagramService:
                 {"tag": "#PassiveIncome", "estimated_posts": "8.5M", "growth": "trending_up"},
                 {"tag": "#MoneyMindset", "estimated_posts": "11.8M", "growth": "stable"},
             ],
+            "civic": [
+                {"tag": "#CivicAwareness", "estimated_posts": "3.2M", "growth": "trending_up"},
+                {"tag": "#SocialJustice", "estimated_posts": "15.8M", "growth": "stable"},
+                {"tag": "#ClimateAction", "estimated_posts": "21.4M", "growth": "trending_up"},
+                {"tag": "#DemocraticRights", "estimated_posts": "2.1M", "growth": "trending_up"},
+                {"tag": "#PublicPolicy", "estimated_posts": "4.6M", "growth": "stable"},
+                {"tag": "#IndianPolitics", "estimated_posts": "11.5M", "growth": "trending_up"},
+            ],
+            "productivity": [
+                {"tag": "#ProductivityTips", "estimated_posts": "14.2M", "growth": "trending_up"},
+                {"tag": "#DeepWork", "estimated_posts": "3.8M", "growth": "trending_up"},
+                {"tag": "#SecondBrain", "estimated_posts": "1.9M", "growth": "trending_up"},
+                {"tag": "#NotionCommunity", "estimated_posts": "4.1M", "growth": "trending_up"},
+                {"tag": "#TimeManagement", "estimated_posts": "18.6M", "growth": "stable"},
+                {"tag": "#DailyHabits", "estimated_posts": "9.5M", "growth": "trending_up"},
+            ],
+            "startups": [
+                {"tag": "#StartupLife", "estimated_posts": "22.1M", "growth": "stable"},
+                {"tag": "#VentureCapital", "estimated_posts": "6.4M", "growth": "trending_up"},
+                {"tag": "#Entrepreneurship", "estimated_posts": "48.9M", "growth": "stable"},
+                {"tag": "#UnitEconomics", "estimated_posts": "1.2M", "growth": "trending_up"},
+                {"tag": "#Bootstrapping", "estimated_posts": "3.5M", "growth": "trending_up"},
+            ],
+            "science": [
+                {"tag": "#ScienceFacts", "estimated_posts": "19.8M", "growth": "stable"},
+                {"tag": "#PhysicsExplained", "estimated_posts": "4.2M", "growth": "trending_up"},
+                {"tag": "#SpaceExploration", "estimated_posts": "16.7M", "growth": "trending_up"},
+                {"tag": "#StemEducation", "estimated_posts": "8.3M", "growth": "stable"},
+            ],
             "general": [
                 {"tag": "#Trending", "estimated_posts": "55M+", "growth": "stable"},
                 {"tag": "#Viral", "estimated_posts": "42M+", "growth": "trending_up"},
@@ -89,14 +119,30 @@ class InstagramService:
                 break
         # Fallback keyword matching
         if cluster_key == "general":
-            if any(kw in niche_lower for kw in ["ai", "software", "coding", "dev", "programming"]):
+            if any(kw in niche_lower for kw in ["ai", "software", "coding", "dev", "programming", "gadget", "phone", "hardware"]):
                 cluster_key = "tech"
-            elif any(kw in niche_lower for kw in ["gym", "workout", "health", "body"]):
+            elif any(kw in niche_lower for kw in ["gym", "workout", "health", "body", "muscle", "diet", "fitness"]):
                 cluster_key = "fitness"
-            elif any(kw in niche_lower for kw in ["money", "invest", "stock", "crypto"]):
+            elif any(kw in niche_lower for kw in ["money", "invest", "stock", "crypto", "tax", "sip", "finance"]):
                 cluster_key = "finance"
+            elif any(kw in niche_lower for kw in ["civic", "social", "rights", "democracy", "policy", "climate", "environment"]):
+                cluster_key = "civic"
+            elif any(kw in niche_lower for kw in ["productivity", "habit", "study", "notion", "discipline", "time"]):
+                cluster_key = "productivity"
+            elif any(kw in niche_lower for kw in ["startup", "business", "founder", "entrepreneur", "venture", "cac"]):
+                cluster_key = "startups"
+            elif any(kw in niche_lower for kw in ["science", "physics", "biology", "math", "space"]):
+                cluster_key = "science"
 
-        return hashtag_clusters.get(cluster_key, hashtag_clusters["general"])[:limit]
+        if cluster_key in hashtag_clusters and cluster_key != "general":
+            return hashtag_clusters[cluster_key][:limit]
+
+        # Dynamic synthesis for novel custom niche
+        clean_words = [re.sub(r'[^a-zA-Z0-9]', '', w) for w in niche.split() if len(w) > 2]
+        dynamic_tags = [{"tag": f"#{w.capitalize()}", "estimated_posts": "1M+", "growth": "trending_up"} for w in clean_words]
+        dynamic_tags.append({"tag": f"#{re.sub(r'[^a-zA-Z0-9]', '', niche)}", "estimated_posts": "500K+", "growth": "trending_up"})
+        dynamic_tags.extend(hashtag_clusters["general"])
+        return dynamic_tags[:limit]
 
     def fetch_trending_reels_for_niche(
         self,
@@ -159,6 +205,23 @@ class InstagramService:
                             })
             except Exception as e:
                 logger.debug(f"Instagram explore scraping failed: {e}")
+
+        # Fallback to Google News RSS for Instagram viral reels if scraping blocked
+        if not reels:
+            try:
+                q = f"{niche} viral reel OR instagram video"
+                feed_url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en"
+                feed = feedparser.parse(feed_url)
+                for idx, entry in enumerate(feed.entries[:limit], 1):
+                    reels.append({
+                        "url": entry.get("link", f"https://www.instagram.com/explore/tags/{re.sub(r'[^a-zA-Z0-9]', '', niche.lower())}/"),
+                        "title": entry.get("title", f"Trending {niche} Reel").replace("- Instagram", "").strip(),
+                        "source": "Google News / Instagram Web",
+                        "content_type": "reel",
+                        "niche": niche,
+                    })
+            except Exception as e:
+                logger.debug(f"Instagram RSS fallback error: {e}")
 
         return reels[:limit]
 

@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/publish", tags=["Composio Publishing & Human Approval"])
 
 @router.post("", response_model=PublishResponse, summary="Submit content for publishing with Human Approval & Composio")
-@router.post("/request", response_model=PublishResponse, summary="Submit content for publishing with Human Approval & Composio")
 def submit_publish_request(req: PublishCreateRequest):
     """
     Submits a post, short, video, or article to be published to YouTube, LinkedIn, X/Twitter, or Substack.

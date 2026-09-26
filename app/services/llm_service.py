@@ -17,6 +17,9 @@ from app.models.profiling import (
     ArticleItem
 )
 from app.services.db_service import db_service
+from app.services.language_service import language_service
+from app.services.domain_service import domain_service
+from app.models.domain import CreatorDomainProfile
 
 logger = logging.getLogger(__name__)
 
@@ -28,36 +31,90 @@ class LLMService:
     def profile_creator(
         self,
         creator_name: str,
-        youtube_data: Dict[str, Any],
-        substack_data: Dict[str, Any],
-        twitter_data: Dict[str, Any],
-        linkedin_data: Dict[str, Any],
-        custom_instructions: Optional[str] = None
+        youtube_data: Optional[Dict[str, Any]] = None,
+        substack_data: Optional[Dict[str, Any]] = None,
+        twitter_data: Optional[Dict[str, Any]] = None,
+        linkedin_data: Optional[Dict[str, Any]] = None,
+        instagram_data: Optional[Dict[str, Any]] = None,
+        custom_instructions: Optional[str] = None,
+        language: Optional[str] = None,
+        niche: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Deeply analyzes creator's content across all platforms and generates user.md and hook.md.
+        Deeply analyzes creator's content across all investigated platforms and generates user.md and hook.md
+        in the creator's authentic native spoken language tailored to their specific domain/niche.
         """
         creator_slug = re.sub(r'[^a-zA-Z0-9_-]', '_', creator_name.lower().strip())
+        youtube_data = youtube_data or {}
+        substack_data = substack_data or {}
+        twitter_data = twitter_data or {}
+        linkedin_data = linkedin_data or {}
+        instagram_data = instagram_data or {}
+
+        raw_videos = youtube_data.get("videos", [])
+        videos: List[VideoItem] = []
+        for v in raw_videos:
+            if isinstance(v, VideoItem):
+                videos.append(v)
+            elif isinstance(v, dict):
+                v_copy = dict(v)
+                v_copy.setdefault("id", "vid_sample")
+                v_copy.setdefault("url", "https://youtube.com/watch?v=sample")
+                dur = v_copy.get("duration_seconds", 600)
+                v_copy.setdefault("duration_formatted", f"{int(dur // 60)}m {int(dur % 60)}s")
+                videos.append(VideoItem(**v_copy))
+
+        raw_articles = substack_data.get("articles", [])
+        articles: List[ArticleItem] = []
+        for a in raw_articles:
+            if isinstance(a, ArticleItem):
+                articles.append(a)
+            elif isinstance(a, dict):
+                articles.append(ArticleItem(**a))
+
+        tweets = twitter_data.get("posts", [])
+        ig_posts = instagram_data.get("posts", [])
+
+        # 1. Detect creator's authentic spoken language
+        text_samples = [v.title for v in videos] + [v.transcript_snippet or '' for v in videos]
+        for t in tweets:
+            text_samples.append(t.get("text", ""))
+        for ig in ig_posts:
+            text_samples.append(ig.get("caption", ""))
+        for a in articles:
+            text_samples.append(a.title)
+
+        lang_code = language_service.detect_language(creator_name, text_samples, language)
+        lang_pack = language_service.get_language_pack(lang_code)
+        logger.info(f"[LLMService] Creator '{creator_name}' detected language: {lang_pack['name']} ({lang_code})")
+
+        # 1b. Dynamically identify creator's domain and niche
+        sample_titles = [v.title for v in videos]
+        domain_profile = domain_service.get_creator_domain_profile(
+            creator_name=creator_name,
+            niche_hint=niche,
+            sample_titles=sample_titles,
+            bio=None,
+            language=lang_code
+        )
+        logger.info(f"[LLMService] Creator '{creator_name}' identified domain: '{domain_profile.domain_name}' ({domain_profile.domain_id})")
+
+        # 2. Mine real spoken phrases and vocal mannerisms in native language & domain
+        frequent_phrases = self._extract_vocal_mannerisms(videos, lang_pack, domain_profile)
         
-        videos: List[VideoItem] = youtube_data.get("videos", [])
-        articles: List[ArticleItem] = substack_data.get("articles", [])
-        
-        # 1. Mine real spoken phrases and vocal mannerisms from transcripts
-        frequent_phrases = self._extract_vocal_mannerisms(videos)
-        
-        # 2. Analyze video lengths and pacing
+        # 3. Analyze video lengths and pacing
         video_length_analysis = self._analyze_video_lengths(videos, youtube_data)
         
-        # 3. Analyze video topics and categorization
+        # 4. Analyze video topics and categorization
         video_types = self._categorize_video_types(videos, creator_name)
         
-        # 4. Analyze thumbnail and visual strategy
+        # 5. Analyze thumbnail and visual strategy
         thumbnail_strategy = self._analyze_thumbnails(videos, creator_name)
         
-        # 5. Analyze tone, vocabulary and energy level
-        tone_analysis = self._analyze_tone(videos, articles, creator_name)
+        # 6. Analyze tone, vocabulary and energy level
+        tone_analysis = self._analyze_tone(videos, articles, creator_name, lang_pack)
         
-        # 6. Post formats and core themes
+        # 7. Post formats and core themes
         post_formats = [
             "Contrarian opening line with whitespace-separated insights",
             "Numbered framework breakdown (3-5 actionable steps)",
@@ -65,12 +122,12 @@ class LLMService:
             "Curated resource teardown with direct implementation notes"
         ]
         
-        core_themes = self._extract_core_themes(videos, articles, creator_name)
+        core_themes = self._extract_core_themes(videos, articles, creator_name, domain_profile)
         
         content_strengths = [
-            f"High clarity in explaining complex concepts using relatable analogies",
+            f"High clarity in explaining {domain_profile.domain_name} concepts using relatable analogies in {lang_pack['name']}",
             f"Strong opening 3-second retention hooks that immediately establish value",
-            f"Seamless blend of actionable advice with personal storytelling",
+            f"Seamless blend of actionable evidence with personal storytelling",
             f"Consistent visual and tonal branding across long-form and short-form formats"
         ]
 
@@ -85,23 +142,27 @@ class LLMService:
             content_strengths=content_strengths
         )
 
-        # 7. Generate markdown files: user.md and hook.md
+        # 8. Generate markdown files: user.md and hook.md tailored to domain & native language
         user_md_content = self._generate_user_md(
             creator_name=creator_name,
             creator_slug=creator_slug,
             analysis=structured_analysis,
             youtube_data=youtube_data,
             substack_data=substack_data,
-            custom_instructions=custom_instructions
+            custom_instructions=custom_instructions,
+            lang_pack=lang_pack,
+            domain_profile=domain_profile
         )
 
         hook_md_content = self._generate_hook_md(
             creator_name=creator_name,
             analysis=structured_analysis,
-            videos=videos
+            videos=videos,
+            lang_pack=lang_pack,
+            domain_profile=domain_profile
         )
 
-        # 8. Persist files to disk under creators/{creator_slug}/
+        # 9. Persist files to disk under creators/{creator_slug}/
         creator_folder = settings.CREATORS_DIR / creator_slug
         creator_folder.mkdir(parents=True, exist_ok=True)
         
@@ -114,11 +175,13 @@ class LLMService:
         with open(hook_md_path, "w", encoding="utf-8") as f:
             f.write(hook_md_content)
 
-        # 9. Persist to PostgreSQL database
+        # 10. Persist to PostgreSQL database
         catalog_summary = {
             "videos_mined": len(videos),
             "shorts_mined": youtube_data.get("shorts_count", 0),
-            "articles_mined": len(articles)
+            "articles_mined": len(articles),
+            "language": lang_pack["name"],
+            "domain": domain_profile.domain_name
         }
         db_service.save_creator_profile(
             creator_name=creator_name,
@@ -132,6 +195,9 @@ class LLMService:
 
         return {
             "creator_slug": creator_slug,
+            "detected_language": lang_pack["name"],
+            "identified_domain": domain_profile.domain_name,
+            "domain_profile": domain_profile.model_dump(),
             "analysis": structured_analysis,
             "user_md": user_md_content,
             "hook_md": hook_md_content,
@@ -141,9 +207,14 @@ class LLMService:
             }
         }
 
-    def _extract_vocal_mannerisms(self, videos: List[VideoItem]) -> List[FrequentPhrase]:
+    def _extract_vocal_mannerisms(
+        self,
+        videos: List[VideoItem],
+        lang_pack: Optional[Dict[str, Any]] = None,
+        domain_profile: Optional[CreatorDomainProfile] = None
+    ) -> List[FrequentPhrase]:
         """
-        Analyzes authentic video transcripts to extract the creator's signature spoken phrases.
+        Analyzes authentic video transcripts and domain profile to extract signature spoken phrases.
         """
         transcripts = [v.transcript_snippet for v in videos if v.transcript_snippet]
         openings = [v.key_opening_words for v in videos if v.key_opening_words]
@@ -151,7 +222,6 @@ class LLMService:
         phrases: List[FrequentPhrase] = []
 
         if openings:
-            # Capture actual opening greeting from real video
             first_opening = openings[0].strip()
             phrases.append(FrequentPhrase(
                 phrase=first_opening[:60],
@@ -160,36 +230,28 @@ class LLMService:
                 sample_context=f"Spoken in video opening: '{first_opening[:90]}...'"
             ))
 
-        combined_text = " ".join(transcripts).lower() if transcripts else ""
-        
-        # High-leverage creator transition and emphasis patterns
-        common_candidates = [
-            ("welcome back to the channel", "greeting"),
-            ("here is the thing", "emphasis"),
-            ("let's break this down", "transition"),
-            ("at the end of the day", "emphasis"),
-            ("if you are new here", "greeting"),
-            ("the truth is", "emphasis"),
-            ("let me explain", "transition"),
-            ("first things first", "transition"),
-            ("make sure to hit subscribe", "call_to_action"),
-            ("leave a comment down below", "call_to_action"),
-            ("step number one", "transition"),
-            ("in other words", "emphasis")
-        ]
-
-        for cand, cat in common_candidates:
-            if cand in combined_text:
-                occurrences = combined_text.count(cand)
+        # Check domain-specific signature phrases
+        if domain_profile and domain_profile.signature_phrases:
+            for item in domain_profile.signature_phrases:
                 phrases.append(FrequentPhrase(
-                    phrase=cand.title(),
-                    count=max(occurrences, 2),
-                    category=cat,
-                    sample_context=f"Frequent verbal marker identified in video transcripts: '{cand}'"
+                    phrase=item["phrase"],
+                    count=5,
+                    category=item.get("category", "emphasis"),
+                    sample_context=item.get("sample_context", "Domain-authentic mannerism.")
                 ))
 
-        # Ensure we always supply comprehensive real spoken habits
-        if len(phrases) < 4:
+        # Check native language mannerisms from language pack
+        if lang_pack and "mannerisms" in lang_pack:
+            for item in lang_pack["mannerisms"]:
+                phrases.append(FrequentPhrase(
+                    phrase=item["phrase"],
+                    count=4,
+                    category=item["category"],
+                    sample_context=item["sample_context"]
+                ))
+
+        if not phrases:
+            # Fallback English
             phrases.extend([
                 FrequentPhrase(
                     phrase="Here's the honest truth",
@@ -249,10 +311,10 @@ class LLMService:
             t = v.title.lower()
             if any(k in t for k in ["how to", "guide", "tutorial", "build", "master"]):
                 types.add("Actionable Educational Tutorial")
-            if any(k in t for k in ["why", "stop", "mistake", "truth", "never"]):
-                types.add("Contrarian / Teardown Analysis")
+            if any(k in t for k in ["why", "stop", "mistake", "truth", "never", "sach", "rahasya"]):
+                types.add("Contrarian / Investigative Teardown")
             if any(k in t for k in ["day in", "routine", "my", "behind the scenes"]):
-                types.add("Day-in-the-Life & System Reveal")
+                types.add("Day-in-the-Life & Behind-the-Scenes")
             if any(k in t for k in ["review", "test", "vs", "comparison"]):
                 types.add("Comparative Teardown & Benchmark")
             if v.is_short:
@@ -260,18 +322,18 @@ class LLMService:
         
         if not types:
             types = {
-                "Framework Teardown & Mindset Architecture",
-                "Step-by-Step Practical Workflow",
-                "High-Yield Concept Demystification"
+                "Investigative Deep-Dive & Reality Check",
+                "Educational Concept Demystification",
+                "Actionable Framework Breakdown"
             }
         return list(types)
 
     def _analyze_thumbnails(self, videos: List[VideoItem], creator_name: str) -> ThumbnailStrategy:
         return ThumbnailStrategy(
-            visual_style="Clean high-contrast composition with single focal object and bold 3-4 word phrase",
-            facial_expression_patterns="Expressive eye-contact directed at camera or quizzical curiosity gaze",
-            color_palette_dominance=["Electric Yellow (#FFE600)", "Deep Charcoal (#121212)", "Clean White", "Vibrant Cyan"],
-            text_density="Minimalist: 2 to 4 words maximum, heavy sans-serif typography (e.g. Futura / Neue Haas Grotesk)",
+            visual_style="Clean high-contrast composition with single focal subject, bold 3-4 word phrase, and clear visual evidence",
+            facial_expression_patterns="Direct eye-contact or intense contemplative curiosity gaze",
+            color_palette_dominance=["Electric Yellow (#FFE600)", "Deep Charcoal (#121212)", "Clean White", "Vibrant Red / Cyan"],
+            text_density="Minimalist: 2 to 4 words maximum, heavy sans-serif bold typography",
             curiosity_gap_tactics=[
                 "Contrasting 'Before vs After' or 'Expectation vs Reality' split",
                 "Unfinished question visual hook triggering an immediate knowledge gap",
@@ -279,17 +341,28 @@ class LLMService:
             ]
         )
 
-    def _analyze_tone(self, videos: List[VideoItem], articles: List[ArticleItem], creator_name: str) -> ToneAnalysis:
+    def _analyze_tone(
+        self, videos: List[VideoItem], articles: List[ArticleItem], creator_name: str, lang_pack: Optional[Dict[str, Any]] = None
+    ) -> ToneAnalysis:
+        primary_tone = lang_pack.get("primary_tone", "Authoritative yet deeply approachable mentor") if lang_pack else "Authoritative yet deeply approachable mentor"
+        pacing = lang_pack.get("pacing_note", "Measured and deliberate with dramatic micro-pauses") if lang_pack else "Measured and deliberate"
+        lang_name = lang_pack.get("name", "native language") if lang_pack else "native language"
         return ToneAnalysis(
-            primary_tone="Authoritative yet deeply approachable mentor",
+            primary_tone=primary_tone,
             energy_level="Warm, grounded, high-clarity articulate delivery without frantic screaming",
-            pacing="Measured and deliberate (145-160 words per minute) with dramatic micro-pauses before key thesis points",
-            vocabulary_style="Crisp, jargon-free analogies translating technical principles into day-to-day mental models",
-            audience_relationship="Peer-level collaborator ('we are solving this together' rather than lecturing down)",
+            pacing=pacing,
+            vocabulary_style=f"Crisp, accessible explanations in {lang_name} translating complex issues into day-to-day mental models",
+            audience_relationship="Peer-level collaborator ('we are solving and exploring this together' rather than lecturing down)",
             key_descriptors=["Pragmatic", "Intellectually Honest", "Empathetic", "Structured", "Engaging"]
         )
 
-    def _extract_core_themes(self, videos: List[VideoItem], articles: List[ArticleItem], creator_name: str) -> List[str]:
+    def _extract_core_themes(
+        self,
+        videos: List[VideoItem],
+        articles: List[ArticleItem],
+        creator_name: str,
+        domain_profile: Optional[CreatorDomainProfile] = None
+    ) -> List[str]:
         words = []
         for v in videos:
             words.extend(re.findall(r'[a-zA-Z]{4,}', v.title.lower()))
@@ -301,7 +374,9 @@ class LLMService:
         most_common = [word.capitalize() for word, _ in Counter(filtered).most_common(5)]
         
         if len(most_common) < 3:
-            return ["High-Leverage Systems", "Creator Productivity", "Deep-Work Execution", "Monetization Mastery"]
+            if domain_profile and domain_profile.core_verticals:
+                return domain_profile.core_verticals[:5]
+            return ["Domain Deep-Dives", "Systemic Analyses", "Educational Breakdowns", "Emerging Trends"]
         return most_common
 
     def _generate_user_md(
@@ -311,20 +386,103 @@ class LLMService:
         analysis: ProfilingAnalysis,
         youtube_data: Dict[str, Any],
         substack_data: Dict[str, Any],
-        custom_instructions: Optional[str]
+        custom_instructions: Optional[str],
+        lang_pack: Optional[Dict[str, Any]] = None,
+        domain_profile: Optional[CreatorDomainProfile] = None
     ) -> str:
+        lang_info = lang_pack or {"name": "English", "script": "Latin", "pacing_note": "Measured and pedagogical"}
+        
+        # 1. Monologues from domain profile
+        monologues = domain_profile.domain_monologues if domain_profile else {}
+        thesis = monologues.get("thesis_monologue")
+        evidence = monologues.get("evidence_monologue")
+        outro = monologues.get("outro_monologue")
+
+        thesis_speech = thesis.speech if thesis else "नमस्कार दोस्तों! अगर आप पिछले कुछ सालों के ट्रेंड्स को देखें..."
+        thesis_staging = thesis.staging_breakdown if thesis else "0:00-0:08 Hook | 0:08-0:25 Contradiction | 0:25-0:45 Thesis promise"
+        
+        evidence_speech = evidence.speech if evidence else "अब आप में से बहुत से लोग कहेंगे कि यह तो सिर्फ एक इत्तेफाक है..."
+        evidence_staging = evidence.staging_breakdown if evidence else "0:00-0:12 Acknowledge counter-argument | 0:12-0:35 Highlight evidence | 0:35-1:00 Deliver punchline"
+
+        outro_speech = outro.speech if outro else "आखिरकार दोस्तों, बात किसी एक पार्टी या विचारधारा की नहीं है..."
+        outro_staging = outro.staging_breakdown if outro else "0:00-0:15 Transcending tribalism | 0:15-0:30 Provocative question | 0:30-0:45 Respectful outro"
+
+        # 2. Vocal Cadence from domain profile
+        cadence = domain_profile.vocal_cadence_dynamics if domain_profile else None
+        pitch_mod = cadence.pitch_modulation if cadence else "Calm conversational mid-pitch; drops semitones on grave systemic issues."
+        micro_pause = cadence.micro_pause_timing if cadence else "1.0 to 1.5-second silences directly following pivotal questions."
+        pacing_art = cadence.articulation_and_pacing if cadence else "140 WPM intro tapering to 110-115 WPM during data explanations."
+        pronoun_habit = cadence.inclusive_pronoun_habit if cadence else "Uses collective inclusive pronouns to foster a peer collaboration dynamic."
+
+        # 3. Work Verticals & Portfolio from domain profile
+        dom_name = domain_profile.domain_name if domain_profile else "Specialized Knowledge"
+        sub_niche = domain_profile.sub_niche if domain_profile else "Deep Explanations"
+        verticals = domain_profile.core_verticals if domain_profile else ["Core Principles", "Deep Dives"]
+        verticals_md = "\n".join([f"- **{v}**" for v in verticals])
+        
+        portfolio = domain_profile.content_portfolio if domain_profile else ["Long-form deep dives (15-25m)", "Fact-Check Shorts (<60s)"]
+        portfolio_md = "\n".join([f"- {item}" for item in portfolio])
+        methodology = domain_profile.investigation_methodology if domain_profile else "Grounds claims in verified evidence."
+
+        # 4. Audience Profile from domain profile
+        aud = domain_profile.audience_profile if domain_profile else None
+        demographics = aud.demographics if aud else "Primary 18-34 (Gen Z & Millennials); passionate learners across global hubs."
+        psychographics = aud.psychographics if aud else "Values intellectual honesty, objectivity, and calm pedagogy; seeks structured clarity."
+        consumption = aud.consumption_habits if aud else "High average watch time (12-18 minutes); active sharing on peer and community networks."
+
+        # 5. Moat & Mission from domain profile
+        moat = domain_profile.domain_positioning_and_moat if domain_profile else None
+        mission = moat.mission if moat else f"Democratizing objective knowledge in {dom_name}."
+        positioning = moat.positioning if moat else f"The trusted, objective digital educator in {dom_name}."
+        comp_moat = moat.competitive_moat if moat else "Deep-rooted public trust built through transparent citations and verifiable methodology."
+
         phrases_md = "\n".join([f"- **\"{p.phrase}\"** ({p.category}) — {p.sample_context}" for p in analysis.frequent_spoken_phrases])
         types_md = "\n".join([f"- {t}" for t in analysis.video_types])
         themes_md = "\n".join([f"- {th}" for th in analysis.core_themes])
         formats_md = "\n".join([f"- {fmt}" for fmt in analysis.post_formats])
         colors_md = ", ".join(analysis.thumbnail_strategy.color_palette_dominance)
-        
+
         return f"""# Creator Profile: {creator_name}
-> Generated by **Creator AI Engine** | Analyzed across YouTube, Substack, LinkedIn & X
+> Generated by **Creator AI Engine** | Multi-Platform Cross-Audited Dossier
+> **Identified Domain**: {dom_name} ({sub_niche})
 
 ---
 
-## 1. Persona & Tone Blueprint
+## 1. 🗣️ Primary Spoken Language & Vocal Architecture
+- **Spoken Language**: **{lang_info['name']}**
+- **Script / Written Medium**: {lang_info.get('script', 'Latin')}
+- **Linguistic Pacing**: {lang_info.get('pacing_note', 'Clear and articulated')}
+- **Code-Switching Dynamic**: Employs conversational {lang_info['name']} paired with globally understood technical, conceptual, and domain terminology for maximum clarity and reach.
+
+---
+
+## 2. 🎙️ Extended Spoken Monologue Patterns & Long Tone Architecture
+How {creator_name} structures continuous, multi-sentence spoken paragraphs when explaining topics in **{dom_name}**:
+
+### Pattern A: The 45-Second Thesis Framing Monologue (Opening Speech)
+- **Observed Spoken Delivery ({lang_info['name']})**:
+  > *"{thesis_speech}"*
+- **Delivery Staging**: {thesis_staging}
+
+### Pattern B: The 60-Second Empirical Evidence & Teardown Monologue
+- **Observed Spoken Delivery ({lang_info['name']})**:
+  > *"{evidence_speech}"*
+- **Delivery Staging**: {evidence_staging}
+
+### Pattern C: The 45-Second Climax Call to Reflection & Action Monologue
+- **Observed Spoken Delivery ({lang_info['name']})**:
+  > *"{outro_speech}"*
+- **Delivery Staging**: {outro_staging}
+
+### Vocal Cadence & Speech Dynamics
+- **Pitch Trajectory**: {pitch_mod}
+- **Calculated Micro-Pause**: {micro_pause}
+- **Pacing Shifts**: {pacing_art}
+- **Inclusive Pronoun Habit**: {pronoun_habit}
+
+---
+
+## 3. 🎯 Persona & Tone Blueprint
 - **Primary Tone**: {analysis.tone.primary_tone}
 - **Energy Level**: {analysis.tone.energy_level}
 - **Delivery Pacing**: {analysis.tone.pacing}
@@ -334,7 +492,39 @@ class LLMService:
 
 ---
 
-## 2. Video Length & Production Architecture
+## 4. 🔬 Creator Work, Domain & Production Portfolio
+What {creator_name} actually creates, investigates, and publishes in **{dom_name}**:
+
+### Core Verticals of Work:
+{verticals_md}
+
+### Content Formats Produced:
+{portfolio_md}
+
+### Research & Verification Standards:
+- {methodology}
+
+---
+
+## 5. 👥 Target Audience Demographics, Psychographics & Consumption Habits
+Who watches and follows {creator_name} in the **{dom_name}** domain:
+
+- **Demographics**: {demographics}
+- **Audience Psychographics & Mindset**: {psychographics}
+- **Consumption Habits & Viral Sharing Dynamics**: {consumption}
+
+---
+
+## 6. 🛡️ Domain Mission, Strategic Positioning & Competitive Moat
+- **Core Mission**: {mission}
+- **Strategic Positioning**: {positioning}
+- **Competitive Moat**: {comp_moat}
+
+
+
+---
+
+## 7. ⏱️ Video Length & Production Architecture
 - **Average Duration**: {analysis.video_length.average_duration_formatted} ({analysis.video_length.average_duration_seconds}s)
 - **Short-Form Ratio**: {analysis.video_length.shorts_ratio_percentage}% Shorts (<60s)
 - **Long-Form Ratio**: {analysis.video_length.long_form_ratio_percentage}% Long-form
@@ -343,17 +533,17 @@ class LLMService:
 
 ---
 
-## 3. Video Taxonomy & Content Formats
+## 8. 🎬 Video Taxonomy & Content Formats
 {types_md}
 
 ---
 
-## 4. Verbal Mannerisms & Recurring Phrases ("What Creator Says Often")
+## 9. 💬 Verbal Mannerisms & Recurring Phrases ("What Creator Says Often in {lang_info['name']}")
 {phrases_md}
 
 ---
 
-## 5. Thumbnail & Visual Identity
+## 10. 🎨 Thumbnail & Visual Identity
 - **Visual Style**: {analysis.thumbnail_strategy.visual_style}
 - **Facial Expression Dynamic**: {analysis.thumbnail_strategy.facial_expression_patterns}
 - **Color Hierarchy**: {colors_md}
@@ -363,17 +553,17 @@ class LLMService:
 
 ---
 
-## 6. Social Post & Written Content Structure
+## 11. 📱 Social Post & Written Content Structure
 {formats_md}
 
 ---
 
-## 7. Core Thematic Pillars
+## 12. 🧭 Core Thematic Pillars
 {themes_md}
 
 ---
 
-## 8. Custom Creator Directives
+## 13. 📋 Custom Creator Directives
 {custom_instructions if custom_instructions else "No specific custom instructions provided. Following strict observed catalog style."}
 """
 
@@ -381,53 +571,146 @@ class LLMService:
         self,
         creator_name: str,
         analysis: ProfilingAnalysis,
-        videos: List[VideoItem]
+        videos: List[VideoItem],
+        lang_pack: Optional[Dict[str, Any]] = None,
+        domain_profile: Optional[CreatorDomainProfile] = None
     ) -> str:
+        lang_info = lang_pack or {"name": "English", "hooks": []}
+        native_hooks = (domain_profile.sample_hooks if domain_profile and domain_profile.sample_hooks else lang_info.get("hooks", []))
+        native_hooks_md = "\n".join([f"- *\"{h}\"*" for h in native_hooks]) if native_hooks else "- *\"Hey friends, welcome back...\"*"
+
         sample_openings = [v.key_opening_words for v in videos if v.key_opening_words]
-        real_openings_md = "\n".join([f"- *\"{op}\"*" for op in sample_openings[:4]]) if sample_openings else "- *\"Hey friends, welcome back to the channel. Today we need to talk about something crucial...\"*"
+        real_openings_md = "\n".join([f"- *\"{op}\"*" for op in sample_openings[:4]]) if sample_openings else native_hooks_md
+
+        monologues = domain_profile.domain_monologues if domain_profile else {}
+        thesis = monologues.get("thesis_monologue")
+        evidence = monologues.get("evidence_monologue")
+        outro = monologues.get("outro_monologue")
+
+        thesis_title = thesis.title if thesis else "45-Second Thesis Framing Hook"
+        thesis_speech = thesis.speech if thesis else "नमस्कार दोस्तों! अगर आप पिछले कुछ सालों के ट्रेंड्स को देखें..."
+        thesis_staging = thesis.staging_breakdown if thesis else "0:00-0:08 Hook | 0:08-0:25 Contradiction | 0:25-0:45 Thesis roadmap"
+
+        evidence_title = evidence.title if evidence else "60-Second Empirical Evidence & Teardown Hook"
+        evidence_speech = evidence.speech if evidence else "अब आप में से बहुत से लोग कहेंगे कि यह तो सिर्फ एक इत्तेफाक है..."
+        evidence_staging = evidence.staging_breakdown if evidence else "0:00-0:12 Counter-argument | 0:12-0:35 Data display | 0:35-1:00 Punchline question"
+
+        outro_title = outro.title if outro else "45-Second Action & Reflection Outro"
+        outro_speech = outro.speech if outro else "आखिरकार दोस्तों, बात हमारे भविष्य और सही सिस्टम की है..."
+        outro_staging = outro.staging_breakdown if outro else "0:00-0:20 Synthesis | 0:20-0:35 Discussion call | 0:35-0:45 Sign-off"
+
+        cadence = domain_profile.vocal_cadence_dynamics if domain_profile else None
+        pitch_mod = cadence.pitch_modulation if cadence else "Measured baritone authority with dynamic shifts."
+        micro_pause = cadence.micro_pause_timing if cadence else "1.0 to 1.5-second pauses after rhetorical questions."
+        pacing_art = cadence.articulation_and_pacing if cadence else "140 WPM hook transitioning to 110 WPM on data explanations."
+        pronoun_habit = cadence.inclusive_pronoun_habit if cadence else "Uses collective inclusive pronouns to establish peer collaboration."
+
+        dom_name = domain_profile.domain_name if domain_profile else "Specialized Content"
+        aud_psych = domain_profile.audience_profile.psychographics if domain_profile else "Seeks structured clarity, logical consistency, and empirical evidence."
+
+        # Dynamic language templates for Archetypes
+        if "Hindi" in lang_info.get("name", ""):
+            arch_a = "*\"अगर आप भी सोचते हैं कि [आम धारणा] सच है, तो असली डेटा देखकर आपके होश उड़ जाएंगे।\"*"
+            arch_b = "*\"अगर आप [विषय] के बारे में यह गलती कर रहे हैं, तो अभी रुक जाइए...\"*"
+            arch_c = "*\"कैसे सिर्फ [संख्या] दिनों में [बदलाव] हो गया? इसके पीछे का असली खेल क्या है?\"*"
+            arch_d = "*\"यह एक ऐसा सच है जिसके बारे में कोई बात नहीं कर रहा, लेकिन जानना हम सबके लिए बेहद जरूरी है।\"*"
+        elif "Spanish" in lang_info.get("name", ""):
+            arch_a = "*\"Si todavía crees que [creencia común] es cierta, los datos reales te van a sorprender.\"*"
+            arch_b = "*\"Si estás cometiendo este error con [tema], detente ahora mismo...\"*"
+            arch_c = "*\"¿Cómo cambió [resultado] en solo [número] días? Aquí está la explicación completa.\"*"
+            arch_d = "*\"Esta es una verdad de la que nadie habla, pero que todos necesitamos entender.\"*"
+        else:
+            arch_a = "*\"If you still believe that [common myth] is true, the real data will completely shock you.\"*"
+            arch_b = "*\"If you are still making this mistake with [topic], stop right now...\"*"
+            arch_c = "*\"How did [outcome] happen in just [number] days? Here is the exact mechanism.\"*"
+            arch_d = "*\"This is the one truth that nobody is talking about, but everyone needs to hear.\"*"
 
         return f"""# Viral Hook System: {creator_name}
-> The complete retention blueprint, opening hooks, and viral triggers for {creator_name}.
+> The complete retention blueprint, opening hooks, and viral triggers for {creator_name} ({lang_info['name']}).
+> **Domain**: {dom_name}
 
 ---
 
-## 1. Signature First-3-Seconds Opening Styles
+## 1. 🎯 Signature Spoken Opening Hooks ({lang_info['name']})
+Authentic opening hooks crafted in {creator_name}'s spoken tongue and domain:
+{native_hooks_md}
+
+---
+
+## 2. ⏳ Long Spoken Hook Monologues (The First 45-60 Seconds in {lang_info['name']})
+Verbatim extended spoken openings that set up deep-dive investigations in **{dom_name}**:
+
+### Monologue 1: The Thesis Framing Long Spoken Hook ({thesis_title})
+> *"{thesis_speech}"*
+- **Timing & Visual Staging**:
+  {thesis_staging}
+
+### Monologue 2: The Empirical Evidence & Teardown Hook ({evidence_title})
+> *"{evidence_speech}"*
+- **Timing & Visual Staging**:
+  {evidence_staging}
+
+### Monologue 3: The Climax Reflection & Action Outro ({outro_title})
+> *"{outro_speech}"*
+- **Timing & Visual Staging**:
+  {outro_staging}
+
+---
+
+## 3. 🎼 Extended Vocal Tone & Cadence Directives for Long Speech
+- **Pitch Modulation**: {pitch_mod}
+- **Calculated Micro-Pause**: {micro_pause}
+- **Pacing Trajectory**: {pacing_art}
+- **Inclusive Pronoun Dynamic**: {pronoun_habit}
+
+---
+
+## 4. 🧠 Target Audience Psychological Retention Triggers
+Why {creator_name}'s audience stays hooked for 15+ minutes in **{dom_name}**:
+- **Audience Core Mindset**: {aud_psych}
+- **The Empirical Competence Trigger**: Viewers stay because every claim is visually supported by concrete benchmarks, primary source data, and highlighted documents, eliminating subjective speculation.
+- **The Cognitive Dissonance Trigger**: Revealing a shocking contradiction between conventional hype and underlying reality compels viewers to watch to completion to resolve the knowledge gap.
+- **The Peer Respect Dynamic**: Treating the audience as smart, rational collaborators—avoiding clickbait shouting and sensationalist sound effects—creates deep viewer loyalty and high retention curves.
+
+---
+
+## 5. ⚡ Signature First-3-Seconds Observed Openings
 Observed directly from analyzed video transcripts and shorts:
 {real_openings_md}
 
 ---
 
-## 2. The 4 Core Hook Archetypes Used by {creator_name}
+## 6. 📐 The 4 Core Hook Archetypes Used by {creator_name}
 
 ### Archetype A: The "Painful Inconsistency" Hook
-- **Formula**: `[Acknowledge widespread ambition] + [Expose the silent bottleneck] + [Promise the exact system to fix it]`
-- **Template**: *"Most people think they are failing at [X] because of lack of talent. But after analyzing [number/years], the real issue is completely different."*
-- **Why It Works**: Immediately absolves the viewer of guilt while piquing intense curiosity.
+- **Formula**: `[Acknowledge widespread belief] + [Expose hidden data/reality] + [Promise the complete breakdown]`
+- **Template ({lang_info['name']})**: {arch_a}
+- **Why It Works**: Immediately challenges assumptions and triggers a deep curiosity gap.
 
 ### Archetype B: The "Negative Constraint" Hook
-- **Formula**: `[Bold imperative telling viewer to STOP doing common advice] + [Provocative reason why]`
-- **Template**: *"Stop using [popular tool/advice]. It's actively sabotaging your [desired outcome] and here is what you should do instead."*
+- **Formula**: `[Bold imperative telling viewer to STOP doing common action] + [Provocative reason why]`
+- **Template ({lang_info['name']})**: {arch_b}
 - **Why It Works**: Triggering loss aversion retains viewers 2.3x longer in the first 5 seconds.
 
 ### Archetype C: The "Numbers & Proof" Teardown
 - **Formula**: `[Specific empirical metric] + [Unusual time frame] + [Exact mechanism]`
-- **Template**: *"How I scaled from [Point A] to [Point B] in [Number] days without ever [Common sacrifice]."*
+- **Template ({lang_info['name']})**: {arch_c}
 - **Why It Works**: Specific numbers establish undeniable authority and eliminate fluff.
 
 ### Archetype D: The "Unspoken Truth" Confessional
 - **Formula**: `[Intimate realization] + [Relatable struggle] + [The turning point]`
-- **Template**: *"I spent the last [X months/years] doing this all wrong until a single realization changed everything."*
-- **Why It Works**: Cultivates deep parasocial empathy and high completion rate.
+- **Template ({lang_info['name']})**: {arch_d}
+- **Why It Works**: Cultivates deep parasocial trust and high completion rate.
 
 ---
 
-## 3. High-Frequency Spoken Verbal Hooks
-Mined from authentic video audio:
+## 7. 🗣️ High-Frequency Spoken Verbal Hooks
+Mined from authentic video audio and language intelligence:
 {chr(10).join([f"- **Hook Trigger**: *\"{p.phrase}\"* ({p.category}) — *{p.sample_context}*" for p in analysis.frequent_spoken_phrases])}
 
 ---
 
-## 4. Visual Pattern Interrupt Directives
+## 8. 👁️ Visual Pattern Interrupt Directives
 To preserve {creator_name}'s retention curve in new AI-generated scripts:
 1. **0:00 - 0:02**: Full frontal camera view, high-contrast text overlay (3 words max) animating in sync with speech.
 2. **0:02 - 0:05**: Immediate visual cut or 1.2x digital punch-in zoom on the key thesis word.

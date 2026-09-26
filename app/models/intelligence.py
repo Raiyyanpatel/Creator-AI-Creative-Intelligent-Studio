@@ -24,7 +24,10 @@ class PlatformChoice(str, Enum):
 class GoalType(str, Enum):
     INCREASE_REACH = "increase_reach"
     INCREASE_FOLLOWERS = "increase_followers"
+    INCREASE_SUBSCRIBERS = "increase_subscribers"
+    MORE_VIEWS_AND_FOLLOWERS = "more_views_and_followers"
     INCREASE_CONNECTIONS = "increase_connections"
+    SPREAD_DOMAIN_POSTS = "spread_domain_posts"
     INCREASE_ENGAGEMENT = "increase_engagement"
     BRAND_AUTHORITY = "brand_authority"
 
@@ -35,21 +38,30 @@ class GoalType(str, Enum):
 
 class IntelligenceRequest(BaseModel):
     creator_name: str = Field(..., description="Creator's display name or handle")
-    niche: str = Field(..., description="Creator's primary niche/domain (e.g. 'AI & Tech', 'Fitness', 'Finance')")
+    niche: Optional[str] = Field("auto", description="Creator's primary niche/domain (e.g. 'Tech & Gadgets', 'Finance & Investing', 'Social Causes', 'Productivity', or 'auto' for automatic detection)")
+    causes_or_topics: Optional[List[str]] = Field(
+        None,
+        description="Creator's specific causes or topics of work (e.g. ['Environmental Crisis', 'Civic Awareness', 'Public Policy']) to find trends related to their work rather than personal news"
+    )
+    language: Optional[str] = Field(
+        None,
+        description="Creator's native spoken language code (e.g. 'hi' for Hindi/Hinglish, 'en' for English, 'es' for Spanish). Auto-detected if omitted."
+    )
     location: str = Field("US", description="Country/region code for location-based trends (e.g. 'US', 'IN', 'GB')")
     platforms: List[PlatformChoice] = Field(
         default=[PlatformChoice.YOUTUBE, PlatformChoice.INSTAGRAM, PlatformChoice.LINKEDIN, PlatformChoice.X_TWITTER],
-        description="Which platforms to analyze"
+        description="Which platforms to investigate. Only the specified platforms will be queried."
     )
     platform_handles: Optional[Dict[str, str]] = Field(
         None,
-        description="Optional handles per platform, e.g. {'youtube': '@mkbhd', 'instagram': 'mkbhd', 'linkedin': 'marques-brownlee', 'x_twitter': 'MKBHD'}"
+        description="Optional handles per platform, e.g. {'youtube': '@dhruvrathee', 'instagram': 'dhruvrathee', 'linkedin': 'dhruvrathee', 'x_twitter': 'dhruv_rathee'}"
     )
-    goals: Optional[Dict[str, GoalType]] = Field(
+    goals: Optional[Dict[str, Any]] = Field(
         None,
-        description="Per-platform goals, e.g. {'instagram': 'increase_reach', 'youtube': 'increase_followers'}"
+        description="Per-platform goals (e.g. {'youtube': 'increase_subscribers', 'instagram': 'more_views_and_followers'})"
     )
     generate_platform_md: bool = Field(True, description="Whether to auto-generate platform.md files")
+    generate_user_hook_md: bool = Field(True, description="Whether to generate/update user.md and hook.md in the creator's native language based on the investigated apps")
 
 
 # ──────────────────────────────────────────────
@@ -143,5 +155,10 @@ class IntelligenceResponse(BaseModel):
         default_factory=dict,
         description="Map of platform -> file path for generated platform.md files"
     )
+    detected_language: Optional[str] = Field(None, description="Creator's detected or specified spoken language")
+    identified_domain: Optional[str] = Field(None, description="Creator's identified domain/niche name")
+    domain_profile: Optional[Dict[str, Any]] = Field(None, description="Structured domain and audience profile")
+    user_md_path: Optional[str] = Field(None, description="Path to generated user.md")
+    hook_md_path: Optional[str] = Field(None, description="Path to generated hook.md")
     summary: Optional[str] = None
 

@@ -51,13 +51,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include core routers at both root level and under /api/
-for prefix in ["", "/api"]:
-    app.include_router(profiling_router, prefix=prefix)
-    app.include_router(dashboard_router, prefix=prefix)
-    app.include_router(trends_router, prefix=prefix)
-    app.include_router(publish_router, prefix=prefix)
-    app.include_router(intelligence_router, prefix=prefix)
+# Include core routers cleanly without duplicate prefix mounting
+app.include_router(profiling_router)
+app.include_router(dashboard_router)
+app.include_router(trends_router)
+app.include_router(publish_router)
+app.include_router(intelligence_router)
 
 @app.get("/", tags=["Health"])
 @app.get("/health", tags=["Health"])
