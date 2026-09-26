@@ -97,8 +97,35 @@ def run_tests():
         print(f"     * \"{phrase_item['phrase']}\" ({phrase_item['category']})")
     print(f"  -> Persisted files at: {prof_data['file_paths']}")
 
+    # 6. Test /intelligence (Cross-Platform Creator Footprint & Trends)
+    print("\n[6/6] Testing /intelligence Endpoint (Auditing creator footprint across YouTube, Instagram, LinkedIn, X)...")
+    intel_payload = {
+        "creator_name": "Raiyyan Patel",
+        "niche": "AI & Full-Stack Development",
+        "location": "IN",
+        "platforms": ["youtube", "instagram", "linkedin", "x_twitter"],
+        "goals": {
+            "youtube": "increase_followers",
+            "instagram": "increase_reach",
+            "linkedin": "increase_connections",
+            "x_twitter": "increase_engagement"
+        },
+        "generate_platform_md": True
+    }
+    intel_res = client.post("/intelligence", json=intel_payload)
+    assert intel_res.status_code == 200, f"Intelligence failed: {intel_res.text}"
+    intel_data = intel_res.json()
+    assert len(intel_data["platforms_analyzed"]) == 4, "Not all 4 platforms were analyzed"
+    assert "creator_profiles" in intel_data, "creator_profiles missing from response"
+    assert len(intel_data["platform_md_files"]) == 4, "Not all 4 platform.md files were generated"
+    print(f"  -> Successfully audited {len(intel_data['platforms_analyzed'])} platforms.")
+    for p, profile in intel_data["creator_profiles"].items():
+        print(f"     * [{p}] Handle: {profile.get('handle')}, Diagnostics: {profile.get('growth_gap_analysis')[:75]}...")
+    print(f"  -> Generated Strategy Reports: {list(intel_data['platform_md_files'].keys())}")
+    print(f"  -> AI Content Blueprints generated: {len(intel_data['top_recommendations'])}")
+
     print("\n" + "=" * 60)
-    print("ALL 4 BACKEND APIS VERIFIED AND PASSING SUCCESSFULLY!")
+    print("ALL 5 CREATOR AI CORE ENGINES VERIFIED AND PASSING SUCCESSFULLY!")
     print("=" * 60)
 
 if __name__ == "__main__":

@@ -2,14 +2,17 @@
 Platform Intelligence Service
 ================================
 Master orchestrator that scrapes cross-platform trends (YouTube, Instagram,
-LinkedIn, X/Twitter), generates per-platform strategy reports (platform.md),
-and produces AI-powered content recommendations.
+LinkedIn, X/Twitter), extracts real creator information and footprint,
+generates per-platform strategy reports (platform.md), and produces
+actionable content recommendations.
 
 Architecture:
-  IntelligenceRequest → [YT Scraper, IG Scraper, LI Scraper, X Scraper]
-                       → Trend Aggregation
-                       → platform.md Generation
-                       → IntelligenceResponse
+  IntelligenceRequest
+    → [YT Scraper & Profile Extractor, IG Scraper & Profile Extractor,
+       LI Scraper & Profile Extractor, X Scraper & Profile Extractor]
+    → Trend Aggregation & Growth Diagnostics
+    → Comprehensive platform_{platform}.md Generation
+    → IntelligenceResponse with CreatorPlatformProfile & Trend Blocks
 """
 
 import re
@@ -30,6 +33,7 @@ from app.models.intelligence import (
     ContentRecommendation,
     PlatformChoice,
     GoalType,
+    CreatorPlatformProfile,
 )
 from app.services.instagram_service import instagram_service
 
@@ -65,6 +69,7 @@ class PlatformIntelService:
         now = datetime.now(timezone.utc).isoformat()
 
         platform_blocks: List[PlatformTrendsBlock] = []
+        creator_profiles_dict: Dict[str, CreatorPlatformProfile] = {}
         recommendations: List[ContentRecommendation] = []
         md_files: Dict[str, str] = {}
 
@@ -73,26 +78,26 @@ class PlatformIntelService:
 
         for platform in req.platforms:
             pname = platform.value
-            goal = goals.get(pname, DEFAULT_GOALS.get(pname, "increase_reach"))
-            # Ensure goal is a plain string, not an enum
-            if hasattr(goal, "value"):
-                goal = goal.value
+            raw_goal = goals.get(pname, DEFAULT_GOALS.get(pname, "increase_reach"))
+            goal = raw_goal.value if hasattr(raw_goal, "value") else str(raw_goal)
             handle = handles.get(pname, req.creator_name)
 
-            logger.info(f"[Intel] Scanning {pname} for creator={req.creator_name}, niche={req.niche}, location={req.location}")
+            logger.info(f"[Intel] Extracting {pname} for creator={req.creator_name}, handle={handle}, niche={req.niche}")
 
             if platform == PlatformChoice.YOUTUBE:
-                block = self._scan_youtube(req.niche, req.location, handle, goal)
+                block = self._scan_youtube(req.creator_name, req.niche, req.location, handle, goal)
             elif platform == PlatformChoice.INSTAGRAM:
-                block = self._scan_instagram(req.niche, req.location, handle, goal)
+                block = self._scan_instagram(req.creator_name, req.niche, req.location, handle, goal)
             elif platform == PlatformChoice.LINKEDIN:
-                block = self._scan_linkedin(req.niche, req.location, handle, goal)
+                block = self._scan_linkedin(req.creator_name, req.niche, req.location, handle, goal)
             elif platform == PlatformChoice.X_TWITTER:
-                block = self._scan_x_twitter(req.niche, req.location, handle, goal)
+                block = self._scan_x_twitter(req.creator_name, req.niche, req.location, handle, goal)
             else:
                 continue
 
             platform_blocks.append(block)
+            if block.creator_profile:
+                creator_profiles_dict[pname] = block.creator_profile
 
             # Generate content recommendations for this platform
             recs = self._generate_recommendations(block, req.niche, pname, goal)
@@ -107,7 +112,6 @@ class PlatformIntelService:
                 blocks=platform_blocks,
                 recommendations=recommendations,
             )
-            # Attach file paths to blocks
             for block in platform_blocks:
                 if block.platform in md_files:
                     block.platform_md_path = md_files[block.platform]
@@ -120,6 +124,7 @@ class PlatformIntelService:
             location=req.location,
             analyzed_at=now,
             platforms_analyzed=[p.value for p in req.platforms],
+            creator_profiles=creator_profiles_dict,
             platform_trends=platform_blocks,
             top_recommendations=recommendations[:10],
             platform_md_files=md_files,
@@ -127,27 +132,151 @@ class PlatformIntelService:
         )
 
     # ──────────────────────────────────────────────
-    # YouTube Scanner
+    # YouTube Scanner & Creator Extractor
     # ──────────────────────────────────────────────
 
-    def _scan_youtube(self, niche: str, location: str, handle: str, goal: str) -> PlatformTrendsBlock:
+    def _scan_youtube(
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+    ) -> PlatformTrendsBlock:
+        # 1. Extract creator-specific profile info
+        creator_profile = self._extract_youtube_creator_profile(creator_name, handle, niche)
+
+        # 2. Discover trending videos in niche, global, and location
         domain_trends = self._youtube_search_trending(niche, location, limit=8)
         global_trends = self._youtube_trending_feed(location, limit=6)
         location_trends = self._youtube_search_trending(f"{niche} {location}", location, limit=5)
 
         hashtags = self._youtube_trending_hashtags(niche)
-
         strategy = self._youtube_strategy(niche, goal)
 
         return PlatformTrendsBlock(
             platform="youtube",
             goal=goal,
+            creator_profile=creator_profile,
             domain_trends=domain_trends,
             location_trends=location_trends,
             global_trends=global_trends,
             hashtag_trends=hashtags,
             content_strategy=strategy,
         )
+
+    def _extract_youtube_creator_profile(
+        self, creator_name: str, handle: str, niche: str
+    ) -> CreatorPlatformProfile:
+        """Extracts authentic YouTube channel metrics and recent uploads using YouTube API v3 or yt-dlp."""
+        clean_handle = handle.replace("@", "").strip() if handle else creator_name.strip()
+        profile = CreatorPlatformProfile(
+            platform="youtube",
+            handle=f"@{clean_handle}",
+            profile_url=f"https://www.youtube.com/@{clean_handle}",
+            display_name=creator_name,
+        )
+
+        api_key = settings.YOUTUBE_API_KEY
+        if api_key:
+            try:
+                # 1. Query channels endpoint by forHandle
+                url = "https://www.googleapis.com/youtube/v3/channels"
+                with httpx.Client(timeout=8.0) as client:
+                    res = client.get(url, params={
+                        "part": "snippet,statistics,contentDetails",
+                        "forHandle": clean_handle,
+                        "key": api_key,
+                    })
+                    item = None
+                    if res.status_code == 200:
+                        items = res.json().get("items", [])
+                        if items:
+                            item = items[0]
+
+                    # If not found by forHandle, try searching channel
+                    if not item:
+                        search_url = "https://www.googleapis.com/youtube/v3/search"
+                        s_res = client.get(search_url, params={
+                            "part": "snippet",
+                            "q": clean_handle or creator_name,
+                            "type": "channel",
+                            "maxResults": 1,
+                            "key": api_key
+                        })
+                        if s_res.status_code == 200:
+                            s_items = s_res.json().get("items", [])
+                            if s_items:
+                                cid = s_items[0].get("id", {}).get("channelId")
+                                if cid:
+                                    c_res = client.get(url, params={
+                                        "part": "snippet,statistics,contentDetails",
+                                        "id": cid,
+                                        "key": api_key
+                                    })
+                                    if c_res.status_code == 200:
+                                        c_items = c_res.json().get("items", [])
+                                        if c_items:
+                                            item = c_items[0]
+
+                    if item:
+                        snippet = item.get("snippet", {})
+                        stats = item.get("statistics", {})
+                        content_details = item.get("contentDetails", {})
+
+                        profile.display_name = snippet.get("title", creator_name)
+                        profile.bio = snippet.get("description", "")
+                        sub_cnt = stats.get("subscriberCount")
+                        profile.follower_or_sub_count = f"{int(sub_cnt):,} subscribers" if sub_cnt else None
+                        vid_cnt = stats.get("videoCount")
+                        profile.total_posts_or_videos = f"{int(vid_cnt):,} videos" if vid_cnt else None
+                        custom_url = snippet.get("customUrl")
+                        profile.profile_url = f"https://www.youtube.com/{custom_url}" if custom_url else f"https://www.youtube.com/@{clean_handle}"
+                        profile.verified = True
+
+                        # Fetch recent videos from uploads playlist
+                        uploads_playlist = content_details.get("relatedPlaylists", {}).get("uploads")
+                        if uploads_playlist:
+                            pl_res = client.get("https://www.googleapis.com/youtube/v3/playlistItems", params={
+                                "part": "snippet",
+                                "playlistId": uploads_playlist,
+                                "maxResults": 5,
+                                "key": api_key
+                            })
+                            if pl_res.status_code == 200:
+                                for p_item in pl_res.json().get("items", []):
+                                    p_snip = p_item.get("snippet", {})
+                                    vid_id = p_snip.get("resourceId", {}).get("videoId", "")
+                                    profile.recent_content.append({
+                                        "title": p_snip.get("title", ""),
+                                        "url": f"https://www.youtube.com/watch?v={vid_id}" if vid_id else None,
+                                        "published_at": p_snip.get("publishedAt", ""),
+                                        "thumbnail": p_snip.get("thumbnails", {}).get("high", {}).get("url"),
+                                        "content_type": "video"
+                                    })
+            except Exception as e:
+                logger.warning(f"YouTube channel profile extraction error: {e}")
+
+        # Fallback to local youtube_service if empty
+        if not profile.recent_content:
+            try:
+                from app.services.youtube_service import youtube_service
+                yt_res = youtube_service.fetch_creator_videos(creator_name, handle, max_videos=3)
+                for v in yt_res.get("videos", []):
+                    profile.recent_content.append({
+                        "title": v.title,
+                        "url": v.url,
+                        "views": f"{v.view_count:,} views" if v.view_count else None,
+                        "duration": v.duration_formatted,
+                        "hook": v.key_opening_words,
+                        "content_type": "short" if v.is_short else "video"
+                    })
+                if not profile.follower_or_sub_count and yt_res.get("metadata", {}).get("subscriber_count"):
+                    profile.follower_or_sub_count = f"{yt_res['metadata']['subscriber_count']:,} subscribers"
+            except Exception as e:
+                logger.debug(f"YouTube service fallback error: {e}")
+
+        profile.growth_gap_analysis = (
+            f"YouTube Channel has {profile.follower_or_sub_count or 'growing audience'} with {profile.total_posts_or_videos or 'an active video catalog'}. "
+            f"To accelerate subscriber growth in '{niche}', prioritize 30-60 second Shorts targeting searchable 'How-to' queries, "
+            f"and optimize the first 5 seconds with pattern-interrupt hooks to increase watch-through rate."
+        )
+        return profile
 
     def _youtube_search_trending(self, query: str, location: str, limit: int = 8) -> List[TrendItem]:
         """Uses YouTube Data API v3 to search for trending videos in a niche."""
@@ -254,15 +383,19 @@ class PlatformIntelService:
         )
 
     # ──────────────────────────────────────────────
-    # Instagram Scanner
+    # Instagram Scanner & Creator Extractor
     # ──────────────────────────────────────────────
 
-    def _scan_instagram(self, niche: str, location: str, handle: str, goal: str) -> PlatformTrendsBlock:
-        # Hashtag trends
+    def _scan_instagram(
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+    ) -> PlatformTrendsBlock:
+        # 1. Extract creator-specific profile info
+        creator_profile = self._extract_instagram_creator_profile(creator_name, handle, niche)
+
+        # 2. Discover trending hashtags and reels
         hashtag_data = instagram_service.fetch_trending_hashtags_for_niche(niche, location)
         hashtags = [h["tag"] for h in hashtag_data]
 
-        # Trending reels
         reels_data = instagram_service.fetch_trending_reels_for_niche(niche, location)
         domain_trends = []
         for idx, reel in enumerate(reels_data, 1):
@@ -277,10 +410,8 @@ class PlatformIntelService:
                 hashtags=[h["tag"] for h in hashtag_data[:5]],
             ))
 
-        # Google Trends as global signal for Instagram content
         global_trends = self._google_trends_rss(location, limit=5, platform_label="instagram")
 
-        # Strategy
         strategy_data = instagram_service.get_reel_strategy(niche, goal)
         strategy_lines = [
             f"**Instagram Strategy for '{niche}' (Goal: {goal})**",
@@ -295,6 +426,7 @@ class PlatformIntelService:
         return PlatformTrendsBlock(
             platform="instagram",
             goal=goal,
+            creator_profile=creator_profile,
             domain_trends=domain_trends,
             location_trends=[],
             global_trends=global_trends,
@@ -302,14 +434,84 @@ class PlatformIntelService:
             content_strategy="\n".join(strategy_lines),
         )
 
+    def _extract_instagram_creator_profile(
+        self, creator_name: str, handle: str, niche: str
+    ) -> CreatorPlatformProfile:
+        """Extracts public Instagram follower stats, bio, and recent post snippets."""
+        clean_handle = handle.replace("@", "").strip() if handle else re.sub(r'[^a-zA-Z0-9._]', '', creator_name.lower())
+        profile = CreatorPlatformProfile(
+            platform="instagram",
+            handle=f"@{clean_handle}",
+            profile_url=f"https://www.instagram.com/{clean_handle}/",
+            display_name=creator_name,
+        )
+
+        try:
+            ddg_url = "https://html.duckduckgo.com/html/"
+            query = f"site:instagram.com/{clean_handle}"
+            with httpx.Client(timeout=8.0) as client:
+                r = client.post(ddg_url, data={"q": query}, headers=HEADERS)
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.text, "html.parser")
+                    for a in soup.find_all("div", class_="result"):
+                        snip_el = a.find("a", class_="result__snippet")
+                        if not snip_el:
+                            continue
+                        snip = snip_el.get_text(strip=True)
+
+                        m = re.search(r"([0-9\.,MKkmb]+)\s+Followers[,\s]+([0-9\.,MKkmb]+)\s+Following[,\s]+([0-9\.,MKkmb]+)\s+Posts", snip, re.I)
+                        if m and not profile.follower_or_sub_count:
+                            profile.follower_or_sub_count = f"{m.group(1)} followers"
+                            profile.following_count = f"{m.group(2)} following"
+                            profile.total_posts_or_videos = f"{m.group(3)} posts"
+                            bio_m = re.search(r'"([^"]+)"', snip)
+                            if bio_m:
+                                profile.bio = bio_m.group(1)
+
+                        post_m = re.search(r"([0-9\.,MKkmb]+)\s+likes?,\s+([0-9\.,MKkmb]+)\s+comments?\s+-\s+([^:]+)\s*:\s*\"([^\"]+)\"", snip, re.I)
+                        if post_m:
+                            profile.recent_content.append({
+                                "likes": post_m.group(1),
+                                "comments": post_m.group(2),
+                                "meta": post_m.group(3).strip(),
+                                "caption": post_m.group(4).strip(),
+                                "content_type": "post_or_reel"
+                            })
+        except Exception as e:
+            logger.debug(f"Instagram profile extraction error: {e}")
+
+        if not profile.recent_content:
+            try:
+                q = f"{creator_name} instagram reel OR viral"
+                feed_url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en"
+                feed = feedparser.parse(feed_url)
+                for entry in feed.entries[:3]:
+                    profile.recent_content.append({
+                        "title": entry.get("title", ""),
+                        "url": entry.get("link", ""),
+                        "published_at": entry.get("published", ""),
+                        "content_type": "reel_mention"
+                    })
+            except Exception:
+                pass
+
+        profile.growth_gap_analysis = (
+            f"Instagram presence ({profile.handle}): Currently has {profile.follower_or_sub_count or 'an established presence'}. "
+            f"To maximize viral reach in '{niche}', shift 70% of production to 7-15s Reels using trending audio within 24 hours of release, "
+            f"and include clear on-screen text hooks for the 80% of viewers watching without audio."
+        )
+        return profile
+
     # ──────────────────────────────────────────────
-    # LinkedIn Scanner
+    # LinkedIn Scanner & Creator Extractor
     # ──────────────────────────────────────────────
 
-    def _scan_linkedin(self, niche: str, location: str, handle: str, goal: str) -> PlatformTrendsBlock:
+    def _scan_linkedin(
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+    ) -> PlatformTrendsBlock:
+        creator_profile = self._extract_linkedin_creator_profile(creator_name, handle, niche)
         domain_trends = self._linkedin_trending_articles(niche, location)
         global_trends = self._google_trends_rss(location, limit=5, platform_label="linkedin")
-
         hashtags = self._linkedin_trending_hashtags(niche)
 
         strategy = (
@@ -327,12 +529,54 @@ class PlatformIntelService:
         return PlatformTrendsBlock(
             platform="linkedin",
             goal=goal,
+            creator_profile=creator_profile,
             domain_trends=domain_trends,
             location_trends=[],
             global_trends=global_trends,
             hashtag_trends=hashtags,
             content_strategy=strategy,
         )
+
+    def _extract_linkedin_creator_profile(
+        self, creator_name: str, handle: str, niche: str
+    ) -> CreatorPlatformProfile:
+        """Extracts public LinkedIn professional details and recent publications."""
+        clean_vanity = handle.replace("@", "").strip() if handle else re.sub(r'[^a-zA-Z0-9-]', '-', creator_name.lower())
+        if "linkedin.com/in/" in clean_vanity:
+            clean_vanity = clean_vanity.split("linkedin.com/in/")[-1].split("/")[0]
+
+        profile = CreatorPlatformProfile(
+            platform="linkedin",
+            handle=clean_vanity,
+            profile_url=f"https://www.linkedin.com/in/{clean_vanity}",
+            display_name=creator_name,
+        )
+
+        try:
+            q = f"site:linkedin.com {creator_name or clean_vanity}"
+            feed_url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en"
+            feed = feedparser.parse(feed_url)
+            for entry in feed.entries[:4]:
+                title = entry.get("title", "").replace("- LinkedIn", "").strip()
+                link = entry.get("link", "")
+                pub = entry.get("published", "")
+                profile.recent_content.append({
+                    "title": title,
+                    "url": link,
+                    "published_at": pub,
+                    "content_type": "post_or_article"
+                })
+                if not profile.bio and (" - " in title or " | " in title):
+                    profile.bio = title
+        except Exception as e:
+            logger.debug(f"LinkedIn profile extraction error: {e}")
+
+        profile.growth_gap_analysis = (
+            f"LinkedIn presence: Focused on '{niche}' domain leadership. "
+            f"To accelerate connections and professional reach, convert key long-form takeaways into 5-7 slide PDF Carousels, "
+            f"and start posts with a contrarian 1-sentence hook before revealing actionable steps."
+        )
+        return profile
 
     def _linkedin_trending_articles(self, niche: str, location: str) -> List[TrendItem]:
         """Scrapes Google News for LinkedIn-relevant trending content in the niche."""
@@ -369,14 +613,15 @@ class PlatformIntelService:
         return base + [f"#{niche.replace(' ', '')}", "#ThoughtLeadership", "#GrowthMindset"]
 
     # ──────────────────────────────────────────────
-    # X (Twitter) Scanner
+    # X (Twitter) Scanner & Creator Extractor
     # ──────────────────────────────────────────────
 
-    def _scan_x_twitter(self, niche: str, location: str, handle: str, goal: str) -> PlatformTrendsBlock:
+    def _scan_x_twitter(
+        self, creator_name: str, niche: str, location: str, handle: str, goal: str
+    ) -> PlatformTrendsBlock:
+        creator_profile = self._extract_x_creator_profile(creator_name, handle, niche)
         domain_trends = self._x_niche_trends(niche, location)
         global_trends = self._google_trends_rss(location, limit=5, platform_label="x_twitter")
-
-        # Attempt scraping trending topics from X/Twitter
         hashtags = self._x_trending_hashtags(niche)
 
         strategy = (
@@ -394,12 +639,69 @@ class PlatformIntelService:
         return PlatformTrendsBlock(
             platform="x_twitter",
             goal=goal,
+            creator_profile=creator_profile,
             domain_trends=domain_trends,
             location_trends=[],
             global_trends=global_trends,
             hashtag_trends=hashtags,
             content_strategy=strategy,
         )
+
+    def _extract_x_creator_profile(
+        self, creator_name: str, handle: str, niche: str
+    ) -> CreatorPlatformProfile:
+        """Extracts X/Twitter handle, recent tweets, and viral threads."""
+        clean_handle = handle.replace("@", "").strip() if handle else re.sub(r'[^a-zA-Z0-9_]', '', creator_name.lower())
+        if "x.com/" in clean_handle or "twitter.com/" in clean_handle:
+            clean_handle = clean_handle.split("/")[-1].replace("@", "")
+
+        profile = CreatorPlatformProfile(
+            platform="x_twitter",
+            handle=f"@{clean_handle}",
+            profile_url=f"https://x.com/{clean_handle}",
+            display_name=creator_name,
+        )
+
+        # Attempt syndication timeline fetch
+        try:
+            syn_url = f"https://syndication.twitter.com/srv/timeline-profile/screen-name/{clean_handle}"
+            with httpx.Client(timeout=5.0) as client:
+                r = client.get(syn_url, headers=HEADERS)
+                if r.status_code == 200:
+                    soup = BeautifulSoup(r.text, "html.parser")
+                    for art in soup.find_all("article")[:4]:
+                        txt = art.get_text(" ", strip=True)
+                        if txt:
+                            profile.recent_content.append({
+                                "text": txt[:250],
+                                "url": f"https://x.com/{clean_handle}",
+                                "content_type": "tweet"
+                            })
+        except Exception:
+            pass
+
+        # Fallback to Google News RSS
+        if not profile.recent_content:
+            try:
+                q = f"{creator_name or clean_handle} tweet OR thread"
+                feed_url = f"https://news.google.com/rss/search?q={q.replace(' ', '+')}&hl=en"
+                feed = feedparser.parse(feed_url)
+                for entry in feed.entries[:4]:
+                    profile.recent_content.append({
+                        "title": entry.get("title", ""),
+                        "url": entry.get("link", ""),
+                        "published_at": entry.get("published", ""),
+                        "content_type": "tweet_mention"
+                    })
+            except Exception as e:
+                logger.debug(f"X profile extraction fallback error: {e}")
+
+        profile.growth_gap_analysis = (
+            f"X footprint (@{clean_handle}): High opportunity in '{niche}' by publishing 1 signature thread weekly "
+            f"optimized for bookmark saves (which algorithmically boosts account authority 5x over retweets), "
+            f"supported by daily observational commentary."
+        )
+        return profile
 
     def _x_niche_trends(self, niche: str, location: str) -> List[TrendItem]:
         """Discovers X/Twitter trending content via Google News RSS for the niche."""
@@ -585,33 +887,74 @@ class PlatformIntelService:
         }.get(block.goal or "", block.goal or "General Growth")
 
         lines = [
-            f"# {platform_display} Intelligence Report: {creator_name}",
-            f"> **Niche**: {niche} | **Location**: {location} | **Goal**: {goal_display}",
-            f"> Generated by Creator AI Engine — {now}",
+            f"# {platform_display} Intelligence & Strategy Report: {creator_name}",
+            f"> **Domain / Niche**: `{niche}` | **Location**: `{location}` | **Primary Goal**: **{goal_display}**",
+            f"> **Engine**: Creator AI Intelligence Suite | **Audited At**: {now}",
             "",
             "---",
             "",
         ]
 
-        # Domain/Niche Trends
-        lines.append(f"## 🔥 {niche} Trending on {platform_display}")
+        # 1. Creator Profile Audit Section
+        profile = block.creator_profile
+        lines.append(f"## 👤 Creator Footprint & Profile Audit")
+        if profile:
+            lines.append(f"- **Official Handle**: [{profile.handle}]({profile.profile_url})")
+            if profile.follower_or_sub_count:
+                lines.append(f"- **Audience Size**: **{profile.follower_or_sub_count}**")
+            if profile.total_posts_or_videos:
+                lines.append(f"- **Published Volume**: {profile.total_posts_or_videos}")
+            if profile.bio:
+                clean_bio = profile.bio.replace("\n", " ").strip()[:200]
+                lines.append(f"- **Profile Positioning / Bio**: _{clean_bio}_")
+            lines.append("")
+
+            if profile.recent_content:
+                lines.append(f"### 🎬 Recent Content & Hooks Analyzed")
+                for idx, c in enumerate(profile.recent_content[:4], 1):
+                    title = c.get("title") or c.get("text") or c.get("caption") or "Recent Post"
+                    url = c.get("url")
+                    views = c.get("views") or (f"{c.get('likes')} likes, {c.get('comments')} comments" if c.get('likes') else "")
+                    hook = c.get("hook")
+
+                    url_str = f" — [View Original]({url})" if url else ""
+                    views_str = f" ({views})" if views else ""
+                    lines.append(f"{idx}. **{title[:90]}**{views_str}{url_str}")
+                    if hook:
+                        lines.append(f"   - _Spoken Hook Opening_: \"{hook}\"")
+                lines.append("")
+
+            if profile.growth_gap_analysis:
+                lines.append("### 📊 Performance Diagnostic & Growth Gap")
+                lines.append(f"> ⚡ **Diagnostic**: {profile.growth_gap_analysis}")
+                lines.append("")
+        else:
+            lines.append(f"- **Handle**: @{creator_name.lower()}")
+            lines.append(f"- **Status**: Profile initialized for cross-platform expansion.")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+        # 2. Domain/Niche Trends
+        lines.append(f"## 🔥 High-Velocity {niche} Trends on {platform_display}")
         lines.append("")
         if block.domain_trends:
             for t in block.domain_trends:
-                url_part = f" — [Link]({t.url})" if t.url else ""
-                views_part = f" | {t.views_or_engagement}" if t.views_or_engagement else ""
+                url_part = f" — [Watch / View Content]({t.url})" if t.url else ""
+                views_part = f" | `{t.views_or_engagement}`" if t.views_or_engagement else ""
                 creator_part = f" by **{t.creator_handle}**" if t.creator_handle else ""
                 lines.append(f"{t.rank}. **{t.title}**{creator_part}{views_part}{url_part}")
                 if t.why_trending:
                     lines.append(f"   - _Why Trending_: {t.why_trending}")
                 if t.suggested_angle:
-                    lines.append(f"   - _Suggested Angle_: {t.suggested_angle}")
+                    lines.append(f"   - _Suggested Creator Angle_: {t.suggested_angle}")
                 lines.append("")
         else:
-            lines.append("_No domain-specific trends discovered. Try broadening the niche or check API keys._")
+            lines.append("_No domain-specific trends discovered. Expand query scope or check network._")
             lines.append("")
 
-        # Location Trends
+        # 3. Location Trends
         if block.location_trends:
             lines.append(f"## 📍 Location Trends ({location})")
             lines.append("")
@@ -620,50 +963,50 @@ class PlatformIntelService:
                 lines.append(f"{t.rank}. **{t.title}**{url_part}")
                 lines.append("")
 
-        # Global Trends
-        lines.append("## 🌍 Global Trends (Cross-Platform Signal)")
+        # 4. Global Trends
+        lines.append("## 🌍 Global Trend Signals (Cross-Platform Momentum)")
         lines.append("")
         if block.global_trends:
             for t in block.global_trends:
                 lines.append(f"{t.rank}. **{t.title}** — {t.views_or_engagement or 'Trending'}")
                 if t.suggested_angle:
-                    lines.append(f"   - _Angle_: {t.suggested_angle}")
+                    lines.append(f"   - _Crossover Opportunity_: {t.suggested_angle}")
                 lines.append("")
         else:
             lines.append("_No global trends captured._")
             lines.append("")
 
-        # Trending Hashtags
+        # 5. Trending Hashtags
         if block.hashtag_trends:
-            lines.append(f"## # Trending Hashtags for {platform_display}")
+            lines.append(f"## # High-Converting Hashtags for {platform_display}")
             lines.append("")
-            lines.append(" ".join(block.hashtag_trends))
+            lines.append("`" + " ".join(block.hashtag_trends) + "`")
             lines.append("")
 
-        # Content Strategy
+        # 6. Content Strategy
         if block.content_strategy:
-            lines.append("## 🎯 Content Strategy")
+            lines.append(f"## 🎯 Actionable Platform Strategy ({goal_display})")
             lines.append("")
             lines.append(block.content_strategy)
             lines.append("")
 
-        # AI Recommendations
+        # 7. AI Recommendations
         if recommendations:
-            lines.append("## 💡 AI-Powered Content Recommendations")
+            lines.append("## 💡 Ready-to-Post Content Blueprints (Next 5 Pieces)")
             lines.append("")
             for idx, rec in enumerate(recommendations, 1):
-                lines.append(f"### Recommendation {idx}: {rec.topic}")
-                lines.append(f"- **Content Type**: {rec.content_type}")
-                lines.append(f"- **Hook**: _{rec.hook}_")
-                lines.append(f"- **Why Now**: {rec.why_now}")
+                lines.append(f"### Blueprint {idx}: {rec.topic}")
+                lines.append(f"- **Format**: `{rec.content_type.upper()}`")
+                lines.append(f"- **Hook / Opening Line**: _{rec.hook}_")
+                lines.append(f"- **Why Now (Trend Driver)**: {rec.why_now}")
                 if rec.best_posting_time:
-                    lines.append(f"- **Best Posting Time**: {rec.best_posting_time}")
+                    lines.append(f"- **Optimal Posting Window**: {rec.best_posting_time}")
                 if rec.hashtags:
-                    lines.append(f"- **Hashtags**: {' '.join(rec.hashtags[:6])}")
+                    lines.append(f"- **Tags**: {' '.join(rec.hashtags[:6])}")
                 lines.append("")
 
         lines.append("---")
-        lines.append(f"_Report generated by Creator AI Engine for **{creator_name}** on {now}_")
+        lines.append(f"_Authored by Creator AI Studio • All rights reserved • Generated for **{creator_name}**_")
 
         return "\n".join(lines)
 
@@ -686,10 +1029,9 @@ class PlatformIntelService:
             for b in blocks
         )
         return (
-            f"Analyzed {total_trends} trending items across {len(blocks)} platforms "
-            f"({platforms_str}) for {creator_name} in the '{niche}' niche. "
-            f"Platform-specific strategy reports and content recommendations have been generated. "
-            f"Check the platform.md files for detailed trend links and action plans."
+            f"Successfully audited creator footprint and extracted {total_trends} trending items across {len(blocks)} platforms "
+            f"({platforms_str}) for {creator_name} in '{niche}'. "
+            f"Tailored platform.md reports with growth diagnostics, real trend links, and content blueprints have been generated."
         )
 
 

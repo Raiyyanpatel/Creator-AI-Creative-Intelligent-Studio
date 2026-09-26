@@ -32,8 +32,11 @@ class YouTubeService:
         query_target = channel_url_or_handle
         if not query_target or not query_target.strip():
             clean_name = creator_name.replace('@', '').strip()
-            # Search both standard videos and shorts
             query_target = f"ytsearch{max_videos}:{clean_name}"
+        elif query_target.strip().startswith('@'):
+            query_target = f"https://www.youtube.com/{query_target.strip()}/videos"
+        elif not query_target.startswith('http') and not query_target.startswith('ytsearch'):
+            query_target = f"ytsearch{max_videos}:{query_target.strip()}"
 
         videos: List[VideoItem] = []
         channel_metadata = {

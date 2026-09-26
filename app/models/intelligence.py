@@ -53,6 +53,28 @@ class IntelligenceRequest(BaseModel):
 
 
 # ──────────────────────────────────────────────
+# Creator Platform Profile
+# ──────────────────────────────────────────────
+
+class CreatorPlatformProfile(BaseModel):
+    """Real creator information extracted from a specific platform."""
+    platform: str
+    handle: str
+    profile_url: str
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    follower_or_sub_count: Optional[str] = None
+    following_count: Optional[str] = None
+    total_posts_or_videos: Optional[str] = None
+    verified: bool = False
+    recent_content: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Recent posts/videos/threads extracted from this creator's profile"
+    )
+    growth_gap_analysis: Optional[str] = None
+
+
+# ──────────────────────────────────────────────
 # Trend Items
 # ──────────────────────────────────────────────
 
@@ -74,9 +96,13 @@ class TrendItem(BaseModel):
 
 
 class PlatformTrendsBlock(BaseModel):
-    """All trends discovered for a single platform."""
+    """All trends and creator profile discovered for a single platform."""
     platform: str
     goal: Optional[str] = None
+    creator_profile: Optional[CreatorPlatformProfile] = Field(
+        None,
+        description="Extracted real creator profile information on this platform"
+    )
     domain_trends: List[TrendItem] = Field(default_factory=list, description="Niche/domain-specific trending content")
     location_trends: List[TrendItem] = Field(default_factory=list, description="Location/region trending content")
     global_trends: List[TrendItem] = Field(default_factory=list, description="Global/worldwide trending content")
@@ -107,6 +133,10 @@ class IntelligenceResponse(BaseModel):
     location: str
     analyzed_at: str
     platforms_analyzed: List[str]
+    creator_profiles: Dict[str, CreatorPlatformProfile] = Field(
+        default_factory=dict,
+        description="Map of platform -> extracted creator profile data"
+    )
     platform_trends: List[PlatformTrendsBlock]
     top_recommendations: List[ContentRecommendation] = []
     platform_md_files: Dict[str, str] = Field(
@@ -114,3 +144,4 @@ class IntelligenceResponse(BaseModel):
         description="Map of platform -> file path for generated platform.md files"
     )
     summary: Optional[str] = None
+
